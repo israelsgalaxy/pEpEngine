@@ -20,6 +20,14 @@
 
 #include "stringpair.h"
 
+/* Exactly like strcasecmp, but guaranteed to be defined as a function and not
+   only as a macro.  Unfortunately we need this for windows. */
+static int strcasecmp_as_a_function(const char *a, const char *b)
+{
+    return strcasecmp(a, b);
+}
+
+
 DYNAMIC_API stringpair_t * new_stringpair(const char *key, const char *value)
 {
     stringpair_t *pair = NULL;
@@ -214,11 +222,13 @@ DYNAMIC_API void free_stringpair_list(stringpair_list_t *stringpair_list)
 }
 
 // ONLY DELETES ONE.
-DYNAMIC_API stringpair_list_t *stringpair_list_delete_by_key(
+static stringpair_list_t *stringpair_list_delete_by_key_possibly_case_sensitive(
         stringpair_list_t *sp_list,
-        const char *key
+        const char *key,
+        bool case_sensitive
     )
 {
+    assert(key);
 
     if (!key || !sp_list)
         return NULL;
@@ -231,10 +241,16 @@ DYNAMIC_API stringpair_list_t *stringpair_list_delete_by_key(
     if (key == NULL)
         return sp_list;
 
+    int (*comparison_function)(const char *, const char *);
+    if (case_sensitive)
+        comparison_function = strcoll;
+    else
+        comparison_function = strcasecmp_as_a_function;
+
     stringpair_list_t *_sl;
     stringpair_list_t *last = NULL;
     for (_sl = sp_list; _sl && _sl->value && _sl->value->key; _sl = _sl->next) {
-        if (strcmp(_sl->value->key, key) == 0) {
+        if (comparison_function(_sl->value->key, key) == 0) {
             if (last == NULL)
                 sp_list = sp_list->next;
             else
@@ -248,11 +264,22 @@ DYNAMIC_API stringpair_list_t *stringpair_list_delete_by_key(
     return sp_list;
 }
 
-/* Exactly like strcasecmp, but guaranteed to be defined as a function and not
-   only as a macro.  Unfortunately we need this for windows. */
-static int strcasecmp_as_a_function(const char *a, const char *b)
+DYNAMIC_API stringpair_list_t *stringpair_list_delete_by_key(
+        stringpair_list_t *sp_list,
+        const char *key
+    )
 {
-    return strcasecmp(a, b);
+    return stringpair_list_delete_by_key_possibly_case_sensitive(sp_list, key,
+                                                                 true);
+}
+
+DYNAMIC_API stringpair_list_t *stringpair_list_delete_by_key_case_insensitive(
+        stringpair_list_t *sp_list,
+        const char *key
+    )
+{
+    return stringpair_list_delete_by_key_possibly_case_sensitive(sp_list, key,
+                                                                 false);
 }
 
 static stringpair_list_t *stringpair_list_find_possibly_case_sensitive(

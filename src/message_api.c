@@ -34,6 +34,7 @@
 
 #include "group.h"
 #include "group_internal.h"
+#include "mixnet.h"
 
 #include "status_to_string.h"
 
@@ -2657,7 +2658,40 @@ static bool message_is_from_Sync(const message *src)
     return true;
 }
 
-static PEP_STATUS encrypt_message_possibly_with_media_key(
+/* Remove non-standard headers leaking information about the nature of this
+   message as a pEp message.  This is intended to be used with any encrypted
+   format; unprotected messages will have to retain their headers.  This does
+   nothing, by design, in passive mode. */
+static PEP_STATUS wash_outer_message_headers(PEP_SESSION session, message *msg)
+{
+    PEP_REQUIRE(session && msg);
+    PEP_STATUS status = PEP_STATUS_OK;
+
+    if (session->passive_mode) {
+        LOG_TRACE("doing nothing in passive mode");
+        return PEP_STATUS_OK;
+    }
+
+    /* Remove fields that should not be there. */
+#define REMOVE(name)                                           \
+    do {                                                       \
+        const char *_name = (name);                            \
+        msg->opt_fields                                        \
+            = stringpair_list_delete_by_key_case_insensitive(  \
+                 msg->opt_fields,                              \
+                 _name);                                       \
+    } while (false)
+    REMOVE("X-pEp-Version");
+    REMOVE("X-EncStatus");
+    REMOVE("X-pEp-onion");
+    REMOVE("X-KeyList");
+    REMOVE("pEp-auto-consume");
+
+    return status;
+#undef REMOVE
+}
+
+PEP_STATUS encrypt_message_possibly_with_media_key(
         PEP_SESSION session,
         message *src,
         stringlist_t * extra,
@@ -2815,6 +2849,9 @@ static PEP_STATUS encrypt_message_possibly_with_media_key(
             added_key_to_real_src = true;
         }
         decorate_message(session, src, PEP_rating_undefined, NULL, true, true);
+        /* We do not want to wash headers here: any header we added, if it needs
+           to be visible to the receiver at all, must be here.
+           So, no call to wash_outer_message_headers in this case. */
         return PEP_UNENCRYPTED;
     }
     else {
@@ -2917,7 +2954,6 @@ static PEP_STATUS encrypt_message_possibly_with_media_key(
         && ! session->unencrypted_subject
         && status == PEP_STATUS_OK) {
         PEP_ASSERT(msg);
-LOG_TRACE("Z: replacing subject: BEFORE:  %s", msg->shortmsg);
         char *old_subject = msg->shortmsg;
 #ifdef WIN32
         msg->shortmsg = strdup("pEp");
@@ -2931,7 +2967,6 @@ LOG_TRACE("Z: replacing subject: BEFORE:  %s", msg->shortmsg);
         }
         else
             free(old_subject);
-LOG_TRACE("Z: replacing subject: AFTER:   %s", msg->shortmsg);
     }
 //////////////////
     }
@@ -2945,6 +2980,12 @@ LOG_TRACE("Z: replacing subject: AFTER:   %s", msg->shortmsg);
     
     // Do similar for extra key list...
     _cleanup_src(src, added_key_to_real_src);
+
+    /* If we arrived here and we did not fail then we have an encrypted message
+       pointed by * dst .  Wash its headers so as not to leak information about
+       the message's nature. */
+    if (status == PEP_STATUS_OK)
+        wash_outer_message_headers(session, * dst);
 
     return status;
 
@@ -2972,6 +3013,8 @@ DYNAMIC_API PEP_STATUS encrypt_message(
     )
 {
     PEP_REQUIRE(session);
+
+
 
     /* First try encrypting the message ignoring the media key. */
     PEP_STATUS status
@@ -4871,16 +4914,25 @@ static PEP_STATUS process_Distribution_message(PEP_SESSION session,
     switch(dist->present) {
         case Distribution_PR_keyreset:
             status = receive_key_reset(session, msg);
+            LOG_NONOK_STATUS_NONOK;
+            if (status == PEP_STATUS_OK)
+                status = PEP_MESSAGE_FULLY_PROCESSED;
             break; // We'll do something later here on refactor!
         case Distribution_PR_managedgroup:
             // Set the group stuff in motion!
             status = receive_managed_group_message(session, msg,
                                                    msg_rating, dist);
+            LOG_NONOK_STATUS_NONOK;
+            if (status == PEP_STATUS_OK)
+                status = PEP_MESSAGE_FULLY_PROCESSED;
             break;
         case Distribution_PR_echo:
             switch (dist->choice.echo.present) {
                 case Echo_PR_echoPing:
-                    status = send_pong(session, msg, dist);
+                    send_pong(session, msg, dist);  /* ignore status */
+                    status = PEP_MESSAGE_FULLY_PROCESSED;
+                    if (status == PEP_STATUS_OK)
+                        status = PEP_MESSAGE_FULLY_PROCESSED;
                     break;
                 case Echo_PR_echoPong:
                     LOG_EVENT("Received a Pong from %s <%s>", ASNONNULLSTR(msg->from->username), ASNONNULLSTR(msg->from->address));
@@ -4902,6 +4954,8 @@ static PEP_STATUS process_Distribution_message(PEP_SESSION session,
         default:
             status = PEP_DISTRIBUTION_ILLEGAL_MESSAGE;
     }
+    if (status == PEP_STATUS_OK)
+        status = PEP_MESSAGE_FULLY_PROCESSED;
 
     ASN_STRUCT_FREE(asn_DEF_Distribution, dist);
     return status;
@@ -5042,6 +5096,114 @@ static const char* process_key_claim(message* src,
     }
 
     return sender_key;
+}
+
+/* This is a helper for decrypt_message_2 .  Build a dummy message to be shown
+   as the result of decryption, when the decrypted message is some internal
+   message not intended for the human user; its handling happens as a side
+   effect of decryption; instead of the actual decrypted message the user will
+   see a message built by this. */
+static PEP_STATUS _make_dummy_decrypted_message(PEP_SESSION session,
+                                                const char *user_text,
+                                                message **msg_p)
+{
+    PEP_REQUIRE(session && ! EMPTYSTR(user_text) && msg_p);
+
+    /* Clear out parameters out of defensiveness. */
+    * msg_p = NULL;
+
+    PEP_STATUS status = PEP_STATUS_OK;
+    message *msg = new_message(PEP_dir_incoming);
+    pEp_identity *from_identity = NULL;
+    pEp_identity *to_identity = NULL;
+#define FAIL_WITH(status_expression)   \
+    do {                               \
+        status = (status_expression);  \
+        goto end;                      \
+    } while (false)
+#define FAIL_IF_NULL(exp)                  \
+    do {                                   \
+        void *_thing = (void *) (exp);     \
+        if (_thing == NULL)                \
+            FAIL_WITH(PEP_OUT_OF_MEMORY);  \
+    } while (false)
+
+    /* Allocate the message and its components.  This is easy enough, but I have
+       to be careful about ownership in case we need to free some structures on
+       out-of-memory errors.  Start with the message. */
+    msg = new_message(PEP_dir_incoming);
+    FAIL_IF_NULL(msg);
+
+    /* Its string components. */
+    msg->shortmsg = strdup("a dummy p≡p message");
+    FAIL_IF_NULL(msg->shortmsg);
+    size_t user_text_length = strlen(user_text);
+    size_t longmsg_size = 1000 + user_text_length + /* '\0' */ 1;
+    msg->longmsg = malloc(longmsg_size);
+    FAIL_IF_NULL(msg->longmsg);
+    sprintf(msg->longmsg,
+            "An administrative p≡p message about %s,\n"
+            "not human-readable and not intended for humans, has been received\n"
+            "and processed.  The administrative message has been replaced with\n"
+            "this dummy message as the result of the p≡p Engine decryption.\n"
+            "function.\n"
+            "\n"
+            "Humans are not supposed to see dummy messages like this, but still\n"
+            "they might in case of bugs, application sofware limitations, or some\n"
+            "service interruption.\n"
+            "In any case you are free to delete this dummy message.  We\n"
+            "apologise for the noise.\n"
+            "\n"
+            "-- \n"
+            "About p≡p Foundation and its software: https://pep.foundation",
+            user_text);
+
+    /* Make two identities. */
+    from_identity = new_identity("dummy@dummy.pep.foundation", // FIXME: each transport should provide its own canonical dummy address
+                                 /* no FPR */ NULL,
+                                 /* no userid */ NULL,
+                                 "p≡p"); // FIXME: each transport should provide its own canonical dummy user name
+    FAIL_IF_NULL(from_identity);
+    to_identity = identity_dup(from_identity);
+    FAIL_IF_NULL(to_identity);
+
+    /* Attach the two identities to the message.  This is delicate because we
+       may need to free the message containing the identities, without double
+       frees. */
+    msg->from = from_identity;
+    from_identity = NULL; /* do not free it twice. */
+
+    msg->to = identity_list_cons(to_identity, NULL);
+    FAIL_IF_NULL(msg->to);
+    to_identity = NULL;  /* do not free it twice. */
+
+    /* Update the identities; if anything goes wrong now we can clean up
+       easily. */
+    status = update_identity(session, msg->from);
+    if (status != PEP_STATUS_OK) goto end;
+    status = update_identity(session, msg->to->ident);
+    if (status != PEP_STATUS_OK) goto end;
+
+    /* Decorate. */
+    _add_auto_consume(msg);
+    PEP_rating rating = PEP_rating_fully_anonymous; // FIXME: what should the rating be?
+    replace_opt_field(msg, "X-EncStatus", rating_to_string(rating), true);
+    msg->rating = rating;
+    if (status != PEP_STATUS_OK)
+        goto end;
+
+ end:
+    LOG_NONOK_STATUS_NONOK;
+    if (status != PEP_STATUS_OK) {
+        free_identity(from_identity);
+        free_identity(to_identity);
+        free_message(msg);
+    }
+    else
+        * msg_p = msg;
+    return status;
+#undef FAIL_WITH
+#undef FAIL_IF_NULL
 }
 
 /** @internal
@@ -6349,7 +6511,10 @@ DYNAMIC_API PEP_STATUS decrypt_message_2(
 
     if (!(*flags & PEP_decrypt_flag_untrusted_server))
         *keylist = NULL;
-        
+
+    /* Remember if the caller asked that we ignore onion routing. */
+    bool ignore_onion_routing = (* flags) & PEP_decrypt_flag_ignore_onion;
+
     // Reset the message rating before doing anything.  We will compute a new
     // value, that _decrypt_message sets as an output parameter.
     src->rating = PEP_rating_undefined;
@@ -6361,6 +6526,7 @@ DYNAMIC_API PEP_STATUS decrypt_message_2(
     PEP_STATUS status = _decrypt_message(session, src, dst, keylist, 
                                          &rating, flags, NULL,
                                          &imported_key_fprs, &changed_key_bitvec);
+    const char *dummy_message_text = "(unknown)"; // To be used for the dummy message in case of PEP_MESSAGE_FULLY_PROCESSED
 
     message *msg = *dst ? *dst : src;
 
@@ -6406,6 +6572,29 @@ DYNAMIC_API PEP_STATUS decrypt_message_2(
 /*     HANDLE_IDENTITY(msg->from); */
 /* } */
 /////// END: "react" HACK
+    // Check for Onion-routed messages.
+    {
+        bool is_onion_routed = stringpair_list_find_case_insensitive(
+                                  msg->opt_fields,
+                                  PEP_THIS_IS_AN_ONION_MESSAGE_FIELD_NAME);
+        if (is_onion_routed)
+            LOG_TRACE("🧅 this is an onion-routed message%s",
+                      (ignore_onion_routing ? " BUT WE ARE IGNORING onion routing" : ""));
+        else
+            LOG_TRACE("💩 this is NOT an onion-routed message");
+        if (! ignore_onion_routing && is_onion_routed) {
+            PEP_STATUS onion_status
+                = handle_incoming_onion_routed_message(session, msg);
+            if (onion_status != PEP_STATUS_OK)
+                LOG_NONOK("🧅failed handling onion-routed message: %i 0x%x %s",
+                          (int) onion_status, (int) onion_status,
+                          pEp_status_to_string(onion_status));
+            else {
+                dummy_message_text = "onion-routing";
+                status = PEP_MESSAGE_FULLY_PROCESSED;
+            }
+        }
+    }
     // Check for Distribution messages.
     {
         /*
@@ -6423,10 +6612,14 @@ DYNAMIC_API PEP_STATUS decrypt_message_2(
         const char *data;
         char *sender_fpr = NULL;
         PEP_STATUS tmpstatus = base_extract_message(session, msg, BASE_DISTRIBUTION, &size, &data, &sender_fpr);
-        if (tmpstatus == PEP_STATUS_OK && size > 0 && data != NULL)
+        if (tmpstatus == PEP_STATUS_OK && size > 0 && data != NULL) {
             // We can ignore failure here.
             process_Distribution_message(session, msg, rating, data, size,
                                          sender_fpr);
+            LOG_TRACE("👉 distribution");
+            dummy_message_text = "a protocol of the Distribution family";
+            status = PEP_MESSAGE_FULLY_PROCESSED;
+        }
         free(sender_fpr);
     } // end of Distribution message handling.
     // Check for Sync messages.
@@ -6440,11 +6633,16 @@ DYNAMIC_API PEP_STATUS decrypt_message_2(
         PEP_STATUS tmp_status = base_extract_message(
            session, msg, BASE_SYNC, &size, &data, &sender_fpr);
         if (!tmp_status && size && data) {
+            LOG_TRACE("👉 sync: size is %i, data at %p sent from %s (really?  I think this is in fact usually false --positron)", (int) size, data, sender_fpr);
             if (sender_fpr)
                 signal_Sync_message(session, rating, data, size, msg->from, sender_fpr);
             // FIXME: this must be changed to sender_fpr
             else if (*keylist)
                 signal_Sync_message(session, rating, data, size, msg->from, (*keylist)->value);
+            // positron: disabled: see 👉 above
+#warning "I dislike this behaviour of base_extract_message.  I should change it."
+            //dummy_message_text = "Sync";
+            //status = PEP_MESSAGE_FULLY_PROCESSED;
         }
         free(sender_fpr);
     } // end of Sync message handling
@@ -6494,6 +6692,31 @@ DYNAMIC_API PEP_STATUS decrypt_message_2(
 
  end:
     free(imported_key_fprs);
+
+    /* In case we already processed the message hide it from the human user, and
+       show a dummy message instead -- the application is supposed to delete it,
+       but it is better to show something understandable in case the application
+       does not handle this. */
+    if (status == PEP_MESSAGE_FULLY_PROCESSED) {
+        message *dummy_message = NULL;
+        PEP_STATUS dummy_message_status
+            = _make_dummy_decrypted_message(session, dummy_message_text,
+                                            & dummy_message);
+        if (dummy_message_status == PEP_STATUS_OK) {
+            free_message(* dst);
+            * dst = dummy_message;
+            LOG_TRACE("returning a dummy message from decryption");
+LOG_TRACE("💩 setting the status to PEP_STATUS_OK instead of PEP_MESSAGE_FULLY_PROCESSED, just because the applications do not support PEP_MESSAGE_FULLY_PROCESSED yet");
+#warning "FIXME: remove the following line after the Thunderbird plugin supports the PEP_MESSAGE_FULLY_PROCESSED feature."
+            status = PEP_STATUS_OK; // FIXME: temporary, *wrong* behaviour.  See above.
+        }
+        else {
+            LOG_NONOK("failed making the dummy message");
+            free_message(dummy_message);
+            status = dummy_message_status;
+        }
+    }
+    LOG_NONOK_STATUS_NONOK;
     return status;
 }
 

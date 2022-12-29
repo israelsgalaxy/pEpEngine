@@ -237,6 +237,19 @@ DYNAMIC_API stringpair_list_t *stringpair_list_delete_by_key(
         const char *key
     );
 
+/**
+ *  <!--       stringpair_list_delete_by_key_case_insensitive()       -->
+ *
+ *  @brief Identical to stringpair_list_delete_by_key except that the key
+ *         comparison is performed case-insensitively; of course there is no
+ *         restriction on values.
+ *
+ */
+DYNAMIC_API stringpair_list_t *stringpair_list_delete_by_key_case_insensitive(
+        stringpair_list_t *sp_list,
+        const char *key
+    );
+
 
 #ifdef __cplusplus
 }

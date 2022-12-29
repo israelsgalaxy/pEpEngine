@@ -1889,6 +1889,7 @@ static PEP_STATUS _prepare_sql_stmts(PEP_SESSION session) {
     PREPARE(db, replace_main_user_fpr_if_equal);
     PREPARE(db, get_main_user_fpr);
     PREPARE(db, refresh_userid_default_key);
+    PREPARE(db, get_onion_identities);
     PREPARE(db, replace_identities_fpr);
     PREPARE(db, remove_fpr_as_identity_default);
     PREPARE(db, remove_fpr_as_user_default);
@@ -1999,6 +2000,7 @@ static PEP_STATUS _finalize_sql_stmts(PEP_SESSION session) {
     sqlite3_finalize(session->get_default_own_userid);
     sqlite3_finalize(session->get_userid_alias_default);
     sqlite3_finalize(session->add_userid_alias);
+    sqlite3_finalize(session->get_onion_identities);
     sqlite3_finalize(session->replace_identities_fpr);
     sqlite3_finalize(session->set_default_identity_fpr);
     sqlite3_finalize(session->get_default_identity_fpr);

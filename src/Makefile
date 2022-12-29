@@ -116,7 +116,7 @@ HEADERS_TO_INSTALL = \
   labeled_int_list.h key_reset.h base64.h sync_codec.h distribution_codec.h \
   message_codec.h storage_codec.h status_to_string.h keyreset_command.h \
   string_utilities.h \
-  echo_api.h distribution_api.h media_key.h \
+  echo_api.h distribution_api.h media_key.h mixnet.h \
   map_asn1.h \
   platform.h platform_unix.h platform_windows.h platform_zos.h \
   pEp_debug.h pEp_log.h sql_reliability.h \

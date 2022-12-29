@@ -410,6 +410,7 @@ struct _pEpSession {
     sqlite3_stmt *get_identities_by_address;
     sqlite3_stmt *get_identities_by_userid;
     sqlite3_stmt *get_identities_by_main_key_id;
+    sqlite3_stmt *get_onion_identities;
     sqlite3_stmt *replace_identities_fpr;
     sqlite3_stmt *replace_main_user_fpr;
     sqlite3_stmt *replace_main_user_fpr_if_equal;

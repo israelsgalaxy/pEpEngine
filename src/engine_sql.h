@@ -169,6 +169,66 @@ static const char *sql_get_identities_by_userid MAYBE_UNUSED =
         "    order by is_own desc, "
         "    timestamp desc; ";
 
+/* This relatively large SQL query is used twice in the definition below. */
+// FIXME: fdik says, quite reasonably that even non-trusted identities to be
+//        used here should be at least yellow; and that trusted identities
+//        must be green.
+//        This current definition does not choose identities in a reasonable way,
+//        but is good enough for testing and trivial to adapt.
+#define _PEP_SQL_GET_ONION_IDENTITIES(trusted_constant_expression,              \
+                                      where_clause_ending,                      \
+                                      limit_expression)                         \
+        " SELECT I.user_id AS sub_user_id,"                                     \
+        "        I.address AS sub_address,"                                     \
+        "        " trusted_constant_expression " AS sub_trusted,"               \
+        "        RANDOM() AS internal_random,"                                  \
+        "        RANDOM() AS external_random" /* needed for the outer ORDER BY: \
+                                                 in a compound query like this  \
+                                                 UNION ALL I can only ORDER BY  \
+                                                 a column name. */              \
+        " FROM Identity I--, Trust T\n"                                         \
+        " WHERE --I.user_id = T.user_id\n"                                      \
+        "       --AND\n"                                                        \
+        "           NOT I.is_own"                                               \
+        "       AND (I.pEp_version_major > 3"                                   \
+        "            OR (I.pEp_version_major = 3"                               \
+        "                AND I.pEp_version_minor >= 4))"                        \
+        /*"       AND I.flags & 0x1000"*/   /* PEP_supports_onion_routing */    \
+        "       --AND T.comm_type >= ?3\n" /* for example PEP_ct_pEp_unconfirmed */ \
+        "       AND (" where_clause_ending ")"                                  \
+        " ORDER BY internal_random"                                             \
+        " LIMIT " limit_expression
+
+/* Find exactly ?2 distinct identities chosen at random and randomly ordered,
+   all of which have at least ?3 comm_type, and of which at least ?1 are
+   trusted.  If not enough identities exist to satisfy the query return fewer;
+   the caller will check how many rows are in the result. */
+static const char *sql_get_onion_identities MAYBE_UNUSED =
+    /* ?1 trusted identity no
+       ?2 total identity no
+       ?3 minimum comm_type */
+        " WITH"
+        "   TrustedOnionIdentities AS ("
+        "     " _PEP_SQL_GET_ONION_IDENTITIES(
+                   "true",
+                   /* trusted */ "I.address >= 'z'"/*"I.flags & 0x2000"*/,
+                   "?1")
+        "   ),"
+        "   MoreOnionIdentities AS ("
+        "     " _PEP_SQL_GET_ONION_IDENTITIES(
+                   "false",
+                   "(I.user_id, I.address) NOT IN"
+                   "  (SELECT sub_user_id, sub_address"
+                   "   FROM TrustedOnionIdentities)",
+                   "(?2 - ?1)")
+        "   )"
+        " SELECT * FROM TrustedOnionIdentities"
+        " UNION ALL" /* ALL is just an optimisation: the results of the two
+                        subqueries are disjoint by construction. */
+        " SELECT * FROM MoreOnionIdentities"
+        " ORDER BY external_random\n"
+        ";";
+
 static const char *sql_replace_identities_fpr MAYBE_UNUSED =
         "update identity"
         "   set main_key_id = ?1 "
