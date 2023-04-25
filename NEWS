@@ -3,6 +3,10 @@
   them to be accessible to the adaptors as well.
   New API functions stringlist_cons, stringlist_reversed, identity_list_cons,
   identity_list_cons_copy, identity_list_reversed .
+* Improve SQL concurrency.  The current change should be a proper fix to
+  https://gitea.pep.foundation/pEp.foundation/pEpEngine/issues/133 ; I was able
+  to see that problem again after upgrading to the latest Thunderbird, but not
+  even that should be solved.
 
 v3.2.1  2023-03-23
 * DEPENDENCIES: require an official release of libpEpTransport.
