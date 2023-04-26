@@ -271,6 +271,7 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
            referred to the previous execution.  The reset operation itself      \
            cannot fail. */                                                      \
         sqlite3_reset(session->begin_exclusive_transaction);                    \
+        LOG_TRACE("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION: trying...");            \
         /* Begin the exclusive transaction, inside an SQL loop: this is where   \
            we spinlock with exponential backoff. */                             \
         PEP_SQL_BEGIN_LOOP(_pEp_sql_sqlite_status);                             \
@@ -285,8 +286,8 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
                . */                                                             \
             _pEp_sql_sqlite_status                                              \
                 = sqlite3_step(session->begin_exclusive_transaction);           \
-            if (_pEp_sql_sqlite_status != SQLITE_OK)                            \
-                LOG_TRACE("in PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION loop with "   \
+            if (_pEp_sql_sqlite_status != SQLITE_DONE)                          \
+                LOG_TRACE("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION: loop with "     \
                           "sqlite status %i", _pEp_sql_sqlite_status);          \
         PEP_SQL_END_LOOP();                                                     \
         /* After this point we must have opened the transaction with success.   \
@@ -297,6 +298,7 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
             LOG_ERROR("UNEXPECTED error on BEGIN EXCLUSIVE TRANSACTION: %i %s", \
                       _pEp_sql_sqlite_status, sqlite3_errmsg(session->db));     \
         PEP_ASSERT(_pEp_sql_sqlite_status == SQLITE_DONE);                      \
+        LOG_TRACE("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION: ...success");           \
     } while (false)
 
 /* This macro factors the common logic of PEP_SQL_COMMIT_TRANSACTION and
@@ -327,6 +329,8 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
                       (_pEp_bool_commit ? "COMMIT" : "ROLLBACK"),               \
                       _pEp_sql_sqlite_status, sqlite3_errmsg(session->db));     \
         PEP_ASSERT(_pEp_sql_sqlite_status == SQLITE_DONE);                      \
+        LOG_TRACE("PEP_SQL_%s_TRANSACTION: success",                            \
+                  (_pEp_bool_commit ? "COMMIT" : "ROLLBACK"));                  \
     } while (false)
 
 /**
