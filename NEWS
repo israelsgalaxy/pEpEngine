@@ -7,6 +7,7 @@
   https://gitea.pep.foundation/pEp.foundation/pEpEngine/issues/133 ; I was able
   to see that problem again after upgrading to the latest Thunderbird, but not
   even that should be solved.
+* This branch is now closed and will see no more work.
 
 v3.2.1  2023-03-23
 * DEPENDENCIES: require an official release of libpEpTransport.
