@@ -1656,7 +1656,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
                                       "PRAGMA wal_checkpoint(TRUNCATE);\n",
                                       NULL, NULL, NULL);
             if (int_result != SQLITE_OK)
-                LOG_NONOK("failed executing early SQLite statements: %i %s",
+                LOG_NONOK("failed executing early first-session SQLite"
+                          " statements: %i %s",
                           int_result, sqlite3_errmsg(session->db));
         } while (int_result != SQLITE_OK);
         //if(int_result != SQLITE_OK)
@@ -1665,7 +1666,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
 
     /* Set database pragmas; I am not sure if some of them only affect one
        connection. */
-    do {
+    PEP_SQL_BEGIN_LOOP(int_result);
+    //do {
         int_result = sqlite3_exec(session->db,
                                   "PRAGMA locking_mode=NORMAL;\n"
                                   "PRAGMA journal_mode=WAL;\n"
@@ -1674,10 +1676,12 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
                                   "PRAGMA wal_autocheckpoint=1;\n"
                                   "",
                                   NULL, NULL, NULL);
-        if (int_result != SQLITE_OK)
+        if (int_result != SQLITE_OK) {
             LOG_NONOK("failed executing early SQLite statements: %i %s",
                       int_result, sqlite3_errmsg(session->db));
-    } while (int_result != SQLITE_OK);
+        }
+    //} while (int_result != SQLITE_OK);
+    PEP_SQL_END_LOOP();
     //if(int_result != SQLITE_OK)
     //    FAIL(PEP_UNKNOWN_DB_ERROR);
     /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
