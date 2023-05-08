@@ -1545,7 +1545,8 @@ static int pEp_open_local_database(PEP_SESSION session,
 
 PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
     PEP_REQUIRE(session);
-    PEP_STATUS status = create_tables(session);
+    PEP_STATUS status = PEP_STATUS_OK;
+    bool very_first __attribute__((__unused__)) = false;
 
 #define FAIL(the_status)        \
     do {                        \
@@ -1558,14 +1559,14 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
     if (int_result != SQLITE_OK)
         FAIL(PEP_INIT_CANNOT_OPEN_DB);
 
-    bool very_first __attribute__((__unused__)) = false;
+    status = create_tables(session);
     if (status != PEP_STATUS_OK)
-        return status;
+        FAIL(status);
 
     int version = 0;
     status = get_db_user_version(session, &version);
     if (status != PEP_STATUS_OK)
-        return status;
+        FAIL(status);
 
     void (*xFunc_lower)(sqlite3_context *, int, sqlite3_value **) = &_sql_lower;
     int_result = sqlite3_create_function_v2(
@@ -1582,14 +1583,14 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
 
     if (version > atoi(_DDL_USER_VERSION)) {
         // This is *explicitly* not allowed.
-        return PEP_INIT_DB_DOWNGRADE_VIOLATION;
+        FAIL(PEP_INIT_DB_DOWNGRADE_VIOLATION);
     }
 
     if (version == 1) {
         // Sometimes the user_version wasn't set correctly.
         status = _verify_version(session, &version);
         if (status != PEP_STATUS_OK)
-            return PEP_ILLEGAL_VALUE;
+            FAIL(PEP_ILLEGAL_VALUE);
     }
 
     if (version != 0) {
@@ -1600,7 +1601,7 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
         // Version 0 DBs are not anymore compatible.
         status = _check_and_execute_upgrades(session, version);
         if (status != PEP_STATUS_OK)
-            return PEP_ILLEGAL_VALUE;
+            FAIL(PEP_ILLEGAL_VALUE);
     } else {
         // Version from DB was 0, it means this is initial setup.
         // DB has just been created, and all tables are empty.
@@ -1617,8 +1618,8 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
                 NULL,
                 NULL
         );
-        PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
-
+        PEP_WEAK_ASSERT_ORELSE(int_result == SQLITE_OK,
+                               FAIL(PEP_UNKNOWN_DB_ERROR));
     }
  end:
     LOG_NONOK_STATUS_CRITICAL;
