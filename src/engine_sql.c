@@ -602,7 +602,8 @@ PEP_STATUS init_databases(PEP_SESSION session) {
     int_result = sqlite3_exec(
             session->db,
             "PRAGMA locking_mode=NORMAL;\n"
-            "PRAGMA journal_mode=WAL;\n",
+            "PRAGMA journal_mode=WAL;\n"
+            "PRAGMA wal_autocheckpoint=0;",
             NULL,
             NULL,
             NULL
