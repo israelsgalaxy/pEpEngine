@@ -151,8 +151,7 @@ int pEp_sqlite3_prepare_v3_nonbusy_nonlocked(PEP_SESSION session,
                                              sqlite3_stmt **ppStmt,
                                              const char **pzTail)
 {
-    PEP_REQUIRE_ORELSE_RETURN(session && db && session->db == db
-                              && ppStmt,
+    PEP_REQUIRE_ORELSE_RETURN(session && db && ppStmt,
                               /* Something generic: this will not happen anyway
                                  except for internal bugs */ SQLITE_ERROR);
     int sqlite_status = SQLITE_OK;
