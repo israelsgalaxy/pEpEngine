@@ -195,7 +195,7 @@ PEP_STATUS pEp_backoff_state_finalize(
         bool _pEp_sql_run_the_inner_loop_body_once_more = true;                 \
         * _pEp_sql_sqlite_status_address = SQLITE_OK;                           \
         do { /* Inner loop beginning... */                                      \
-PEP_SQL_CHECKPOINT; /* FIXME: almost certainly excessive. */\
+/*PEP_SQL_CHECKPOINT;*/ /* FIXME: almost certainly excessive. */\
             /* After the expansion of this macro comes the user C code to be            \
                tried multiple times.  Looking at macroexpanded the user C code  \
                will appear inside this inner loop... */                         \
@@ -228,7 +228,7 @@ PEP_SQL_CHECKPOINT; /* FIXME: almost certainly excessive. */\
         pEp_backoff_state_finalize(session,                                     \
                                    & _pEp_sql_backoff_state);                   \
         /* Help other threads proceed by committing the latest changes. */      \
-        PEP_SQL_CHECKPOINT;                                                     \
+        /*PEP_SQL_CHECKPOINT*/;                                                     \
     } while (false) /* End of the outer block. */
 
 
