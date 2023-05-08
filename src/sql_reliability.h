@@ -247,7 +247,7 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
                                         NULL, NULL);                     \
         if (int_result != SQLITE_OK)                                     \
             LOG_NONOK("tried to checkpoint (%s): the result was %i %s",  \
-                      int_result, sqlite3_errmsg(session->db));          \
+                      # kind, int_result, sqlite3_errmsg(session->db));  \
     } while (false)
 
 /* Perform explicit checkpointing.  This is intended to prevent starvation by
