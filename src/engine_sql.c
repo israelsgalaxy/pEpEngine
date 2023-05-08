@@ -1872,6 +1872,12 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
     PREPARE(db, set_as_pEp_user);
     PREPARE(db, is_pEp_user);
     PREPARE(db, add_into_social_graph);
+    PREPARE(db, get_own_address_binding_from_contact);
+    PREPARE(db, set_revoke_contact_as_notified);
+    PREPARE(db, get_contacted_ids_from_revoke_fpr);
+    PREPARE(db, was_id_for_revoke_contacted);
+    PREPARE(db, has_id_contacted_address);
+    PREPARE(db, get_last_contacted);
     PREPARE(db, set_pgp_keypair);
     PREPARE(db, set_pgp_keypair_flags);
     PREPARE(db, unset_pgp_keypair_flags);
@@ -1939,7 +1945,6 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
     PREPARE(db, is_active_group_member);
     PREPARE(db, is_group_active);
     // PREPARE(db, group_invite_exists);
-    /* End groups */
 
     // Completely obsolete, I believe.
     PREPARE(db, log);
