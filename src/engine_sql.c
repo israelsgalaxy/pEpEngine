@@ -1650,6 +1650,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     int_result = sqlite3_exec(session->db,
                               "PRAGMA locking_mode=NORMAL;\n"
                               "PRAGMA journal_mode=WAL;\n"
+                              "PRAGMA journal_mode=DELETE;\n"
                               "PRAGMA foreign_key=ON;\n"
                               "PRAGMA wal_autocheckpoint=1;\n"
                               "",
@@ -1667,6 +1668,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     if (first_session_only) {
         do {
             int_result = sqlite3_exec(session->db,
+                                      "PRAGMA integrity_check;\n"
                                       "PRAGMA optimize;\n"
                                       "VACUUM;\n"
                                       "PRAGMA wal_checkpoint(TRUNCATE);\n",
