@@ -1651,6 +1651,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
                               "PRAGMA locking_mode=NORMAL;\n"
                               "PRAGMA journal_mode=WAL;\n"
                               "PRAGMA foreign_key=ON;\n"
+                              "PRAGMA wal_autocheckpoint=1;\n"
                               "",
                               NULL, NULL, NULL);
     if(int_result != SQLITE_OK)
