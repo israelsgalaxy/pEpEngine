@@ -1568,7 +1568,6 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
         return status;
 
     void (*xFunc_lower)(sqlite3_context *, int, sqlite3_value **) = &_sql_lower;
-
     int_result = sqlite3_create_function_v2(
             session->db,
             "lower",
@@ -1592,7 +1591,6 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
         if (status != PEP_STATUS_OK)
             return PEP_ILLEGAL_VALUE;
     }
-
 
     if (version != 0) {
         // Version has been already set
