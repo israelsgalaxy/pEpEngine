@@ -43,7 +43,6 @@ static void _sql_lower(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
     }
 }
 
-//#ifdef _PEP_SQLITE_DEBUG
 /**
  *  @internal
  *
@@ -57,32 +56,32 @@ static void _sql_lower(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
  *  @param[in]    *X        void
  *
  */
-int sql_trace_callback (unsigned trace_constant,
-                        void *session_as_context_ptr,
-                        void* P,
-                        void* X) {
+static int sql_trace_callback (unsigned trace_constant,
+                               void *session_as_context_ptr,
+                               void* P,
+                               void* X) {
     PEP_SESSION session = (PEP_SESSION) session_as_context_ptr;
     PEP_REQUIRE_ORELSE(session, { return 0; });
     switch (trace_constant) {
         case SQLITE_TRACE_STMT:
             const char* X_str = (const char*) X;
             if (!EMPTYSTR(X_str) && X_str[0] == '-' && X_str[1] == '-')
-                LOG_TRACE("SQL_DEBUG: STMT - %s\n", X_str);
+                LOG_TRACE("statement: %s\n", X_str);
             else
-                LOG_TRACE("SQL_DEBUG: STMT - %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
+                LOG_TRACE("statement: %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
             break;
         case SQLITE_TRACE_ROW:
-            LOG_TRACE("SQL_DEBUG: ROW - %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
+            LOG_TRACE("row: %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
             break;
         case SQLITE_TRACE_CLOSE:
-            LOG_TRACE("SQL_DEBUG: CLOSE - ");
+            LOG_TRACE("close");
             break;
         default:
+            LOG_TRACE("unexpected trace_constant %u", trace_constant);
             break;
     }
     return 0;
 }
-//#endif
 
 /**
  *  @internal
