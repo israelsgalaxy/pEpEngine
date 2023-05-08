@@ -428,6 +428,24 @@ PEP_STATUS pEp_backoff_state_finalize(
 int pEp_sqlite3_step_nonbusy(PEP_SESSION session,
                              sqlite3_stmt *statement);
 
+/* Following the same idea of pEp_sqlite3_step_nonbusy, these function serve to
+   prepare a statement in a possibly concurrent context, without worrying about
+   SQLITE_BUSY and, in this case, about SQLITE_LOCKED either.
+   Differently from pEp_sqlite3_step_nonbusy these do not use a transaction.
+   See https://www.sqlite.org/c3ref/prepare.html . */
+int pEp_sqlite3_prepare_v2_nonbusy_nonlocked(PEP_SESSION session,
+                                             sqlite3 *db,
+                                             const char *zSql,
+                                             int nByte,
+                                             sqlite3_stmt **ppStmt,
+                                             const char **pzTail);
+int pEp_sqlite3_prepare_v3_nonbusy_nonlocked(PEP_SESSION session,
+                                             sqlite3 *db,
+                                             const char *zSql,
+                                             int nByte,
+                                             unsigned int prepFlags,
+                                             sqlite3_stmt **ppStmt,
+                                             const char **pzTail);
 
 #ifdef __cplusplus
 } /* extern "C" */

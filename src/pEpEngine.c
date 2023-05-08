@@ -3988,7 +3988,7 @@ DYNAMIC_API PEP_STATUS reset_pEptest_hack(PEP_SESSION session)
     );
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
-    int_result = sqlite3_prepare_v2(session->db, sql_get_all_keys_for_identity,
+    int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_get_all_keys_for_identity,
             (int)strlen(sql_get_all_keys_for_identity), &session->get_all_keys_for_identity, NULL);
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 

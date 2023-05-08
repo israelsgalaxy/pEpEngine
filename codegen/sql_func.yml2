@@ -12,7 +12,7 @@ function "init_sql" {
     param "sql";
     ||
         sqlite3_stmt *_sql;
-        int int_result = sqlite3_prepare_v2(session->db,
+        int int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db,
     ||
     indent(2); copy '$sql';
     ||

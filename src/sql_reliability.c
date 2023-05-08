@@ -142,3 +142,45 @@ int pEp_sqlite3_step_nonbusy(PEP_SESSION session,
 
     return sqlite_status;
 }
+
+int pEp_sqlite3_prepare_v3_nonbusy_nonlocked(PEP_SESSION session,
+                                             sqlite3 *db,
+                                             const char *zSql,
+                                             int nByte,
+                                             unsigned int prepFlags,
+                                             sqlite3_stmt **ppStmt,
+                                             const char **pzTail)
+{
+    PEP_REQUIRE_ORELSE_RETURN(session && db && session->db == db
+                              && ppStmt,
+                              /* Something generic: this will not happen anyway
+                                 except for internal bugs */ SQLITE_ERROR);
+    int sqlite_status = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(sqlite_status);
+    sqlite_status
+        = sqlite3_prepare_v3(db, zSql, nByte, prepFlags, ppStmt, pzTail);
+    if (sqlite_status == SQLITE_LOCKED) {
+        /* This can actually happen when preparing statements, but such a status
+           is not supported by PEP_SQL_END_LOOP which is mostly used for
+           stepping.  We can log a warning and work as if this were
+           SQLITE_BUSY. */
+        LOG_NONOK("get SQLITE_LOCKED when preparing the statement %s --"
+                  " trying again.", zSql);
+        sqlite_status = SQLITE_BUSY;
+    }
+    PEP_SQL_END_LOOP();
+
+    return sqlite_status;
+}
+
+int pEp_sqlite3_prepare_v2_nonbusy_nonlocked(PEP_SESSION session,
+                                             sqlite3 *db,
+                                             const char *zSql,
+                                             int nByte,
+                                             sqlite3_stmt **ppStmt,
+                                             const char **pzTail)
+{
+    return pEp_sqlite3_prepare_v3_nonbusy_nonlocked(session, db, zSql, nByte,
+                                                    /* the missing argument */ 0,
+                                                    ppStmt, pzTail);
+}

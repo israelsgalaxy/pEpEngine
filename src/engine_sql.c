@@ -145,13 +145,15 @@ static int db_contains_table(PEP_SESSION session, const char* table_name) {
     strlcat(sql_buf, table_name, max_q_len);
     strlcat(sql_buf, q2, max_q_len);
 
-    sqlite3_stmt *stmt;
+    sqlite3_stmt *stmt = NULL;
 
-    sqlite3_prepare_v2(session->db, sql_buf, -1, &stmt, NULL);
+    int rc = SQLITE_OK;
+    rc = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_buf, -1, &stmt, NULL);
+    PEP_WEAK_ASSERT_ORELSE_RETURN(rc == SQLITE_OK, 1);
 
     int retval = 0;
 
-    int rc = pEp_sqlite3_step_nonbusy(session, stmt);
+    rc = pEp_sqlite3_step_nonbusy(session, stmt);
     if (rc == SQLITE_DONE || rc == SQLITE_OK || rc == SQLITE_ROW) {
         retval = 1;
     }
@@ -210,7 +212,7 @@ static int table_contains_column(PEP_SESSION session, const char* table_name,
     sqlite3_stmt *stmt = NULL;
 
     int rc = SQLITE_OK;
-    rc = sqlite3_prepare_v2(session->db, sql_buf, -1, &stmt, NULL);
+    rc = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_buf, -1, &stmt, NULL);
     PEP_ASSERT(rc == SQLITE_OK
                /* expected when the column does not exist. */
                || rc == SQLITE_ERROR);
@@ -250,7 +252,7 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
 
     const char* sql_query = "select tbl_name from sqlite_master WHERE sql LIKE '%REFERENCES%' AND sql LIKE '%_old%';";
     sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(session->db, sql_query, -1, &stmt, NULL);
+    pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_query, -1, &stmt, NULL);
     int i = 0;
     int int_result = 0;
     while ((int_result = pEp_sqlite3_step_nonbusy(session, stmt)) == SQLITE_ROW && i < _PEP_MAX_AFFECTED) {
@@ -470,7 +472,7 @@ static PEP_STATUS upgrade_revoc_contact_to_13(PEP_SESSION session) {
     identity_list* id_list = NULL;
 
     sqlite3_stmt* tmp_own_id_retrieve = NULL;
-    int sqlite_status = sqlite3_prepare_v2(session->db, sql_own_identities_retrieve, -1, &tmp_own_id_retrieve, NULL);
+    int sqlite_status = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_own_identities_retrieve, -1, &tmp_own_id_retrieve, NULL);
     PEP_ASSERT(sqlite_status == SQLITE_OK
                || /* Expected when Identity.Username does not exist. */
                sqlite_status == SQLITE_ERROR);
@@ -489,7 +491,9 @@ static PEP_STATUS upgrade_revoc_contact_to_13(PEP_SESSION session) {
 
     sqlite3_stmt* update_revoked_w_addr_stmt = NULL;
     const char* sql_query = "update revocation_contact_list set own_address = ?1 where fpr = ?2;";
-    sqlite3_prepare_v2(session->db, sql_query, -1, &update_revoked_w_addr_stmt, NULL);
+    sqlite_status = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_query, -1, &update_revoked_w_addr_stmt, NULL);
+    if (sqlite_status != SQLITE_OK)
+        return PEP_UNKNOWN_DB_ERROR;
 
     // Ok, go through and find any keys associated with this address
     for ( ; curr_own && curr_own->ident; curr_own = curr_own->next) {
@@ -1712,8 +1716,15 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
 
     int int_result = SQLITE_OK;
 
-#define CHECK_FOR_FAILURE                                                   \
+#define PREPARE(db_field_name, session_field_name)                          \
     do {                                                                    \
+        int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(              \
+                        session,                                            \
+                        session->db_field_name,                             \
+                        sql_ ## session_field_name,                         \
+                        (int) strlen(sql_ ## session_field_name),           \
+                        & session->session_field_name,                      \
+                        NULL);                                              \
         if (int_result != SQLITE_OK) {                                      \
             LOG_CRITICAL("cannot initialise SQL statement");                \
             LOG_CRITICAL("SQLite error: %s", sqlite3_errmsg(session->db));  \
@@ -1722,6 +1733,7 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
     } while (false)
 
     /* Trustwords / system db. */
+    PREPARE(system_db, trustword);
     int_result = sqlite3_prepare_v2(session->system_db, sql_trustword,
                                     (int)strlen(sql_trustword), &session->trustword, NULL);
     CHECK_FOR_FAILURE;
@@ -2174,7 +2186,7 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
     /* End groups */
 
     return PEP_STATUS_OK;
-#undef CHECK_FOR_FAILURE
+#undef PREPARE
 }
 
 PEP_STATUS pEp_finalize_sql_stmts(PEP_SESSION session) {

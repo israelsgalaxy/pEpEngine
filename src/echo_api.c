@@ -171,20 +171,24 @@ PEP_STATUS echo_initialize(PEP_SESSION session)
        will be important in the future for embedded platforms with limited
        resources. */
     int sql_status;
-    sql_status = sqlite3_prepare_v2(session->db, echo_get_challenge_text,
+    sql_status = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session,
+                                    session->db, echo_get_challenge_text,
                                     -1, &session->echo_get_challenge,
                                     NULL);
     ON_SQL_ERROR_SET_STATUS_AND_GOTO;
-    sql_status = sqlite3_prepare_v2(session->db, echo_set_challenge_text,
+    sql_status = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session,
+                                    session->db, echo_set_challenge_text,
                                     -1, &session->echo_set_challenge,
                                     NULL);
     ON_SQL_ERROR_SET_STATUS_AND_GOTO;
-    sql_status = sqlite3_prepare_v2(session->db,
+    sql_status = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session,
+                                    session->db,
                                     echo_get_echo_below_rate_limit_text, -1,
                                     &session->echo_get_echo_below_rate_limit,
                                     NULL);
     ON_SQL_ERROR_SET_STATUS_AND_GOTO;
-    sql_status = sqlite3_prepare_v2(session->db, echo_set_timestamp_text,
+    sql_status = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session,
+                                    session->db, echo_set_timestamp_text,
                                     -1, &session->echo_set_timestamp,
                                     NULL);
     ON_SQL_ERROR_SET_STATUS_AND_GOTO;
