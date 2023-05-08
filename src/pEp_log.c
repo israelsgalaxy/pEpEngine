@@ -148,7 +148,7 @@ static const char* _log_level_to_string(PEP_LOG_LEVEL level)
    different fields. */
 #define PEP_LOG_PRINTF_FORMAT_NO_DATE                         \
     "%s%s%s"                        /* system, subsystem */   \
-    " %" PRId64 ",%" PRId64         /* pid, tid */            \
+    " %" PRId64 "/%" PRId64         /* pid, tid */            \
     " %s"                           /* log level */           \
     " %s:%i%s%s"                    /* source location */     \
     "%s%s"                          /* entry */
@@ -189,7 +189,7 @@ static const char* _log_level_to_string(PEP_LOG_LEVEL level)
             && sqlite_status != SQLITE_DONE) {                              \
             struct pEp_pid_and_tid _warning_pid_and_tid;                    \
             pEp_set_pid_and_tid(& _warning_pid_and_tid);                    \
-            fprintf(stderr, "%li,%li %s:%i %s sql_error is %i (%s)\n",      \
+            fprintf(stderr, "%li/%li %s:%i %s sql_error is %i (%s)\n",      \
                     (long) _warning_pid_and_tid.pid,                        \
                     (long) _warning_pid_and_tid.tid,                        \
                     __FILE__, __LINE__, __func__,                           \
