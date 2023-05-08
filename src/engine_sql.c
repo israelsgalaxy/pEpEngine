@@ -1658,7 +1658,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
        here, setting the busy wait time to 5 seconds.  I removed it.  We are now
        handling SQLITE_BUSY through the functionality in sql_reliabiliy.h and
        sql_reliabiliy.c . */
-    sqlite3_busy_timeout(session->db, 0);
+    //sqlite3_busy_timeout(session->db, 0);
+    sqlite3_busy_timeout(session->db, 5000);
 
 
     if (first_session_only) {
