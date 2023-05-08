@@ -254,15 +254,9 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
    making changes available to other concurrent database connections. */
 #define PEP_SQL_CHECKPOINT                                            \
     do {                                                              \
-        LOG_TRACE("checkpointing");                                   \
-/*        LOG_NONOK("checkpointing after backing off from %s %i times"  \
-                  "(checkpointing once every %i times)",              \
-                  s->source_location, (int) s->failure_no,            \
-                  (int) PEP_BACKOFF_TIMES_BEFORE_CHECKPOINTING);*/      \
+        LOG_TRACE("checkpointing...")                                 \
         PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_PASSIVE);       \
-        PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_FULL);          \
         PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_RESTART);       \
-        LOG_TRACE("...done checkpointing");                           \
     } while (false)
 
 
