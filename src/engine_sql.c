@@ -90,13 +90,14 @@ static int sql_trace_callback (unsigned trace_constant,
  *
  *  @brief            TODO
  *
- *  @param[in]    *pArg        void
+ *  @param[in]    *pArg        the pEp session
  *  @param[in]    iErrCode     int
  *  @param[in]    *zMsg        constchar
  *
  */
-void errorLogCallback(void *pArg, int iErrCode, const char *zMsg){
-    fprintf(stderr, "(%d) %s\n", iErrCode, zMsg);
+void errorLogCallback(void *session_as_pArt, int iErrCode, const char *zMsg){
+    PEP_SESSION session = (PEP_SESSION) session_as_pArt;
+    LOG_ERROR("(%d) %s", iErrCode, zMsg);
 }
 
 // TODO: refactor and generalise these two functions if possible.
@@ -1584,6 +1585,8 @@ static PEP_STATUS _check_and_execute_upgrades(PEP_SESSION session, int version) 
 }
 
 PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     bool very_first __attribute__((__unused__)) = false;
     PEP_STATUS status = create_tables(session);
     if (status != PEP_STATUS_OK)
@@ -1673,6 +1676,8 @@ PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
                       int_result, sqlite3_errmsg(session->db));
     } while (int_result != SQLITE_OK);
 
+end:
+    LOG_NONOK_STATUS_CRITICAL;
     return status;
 }
 
