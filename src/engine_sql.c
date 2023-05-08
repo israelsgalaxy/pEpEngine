@@ -608,6 +608,8 @@ PEP_STATUS init_databases(PEP_SESSION session) {
             NULL,
             NULL
     );
+    if (int_result != SQLITE_OK)
+        return PEP_INIT_CANNOT_OPEN_DB;
 
     /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
        here, setting the busy wait time to 5 seconds.  I removed it.  We are now
