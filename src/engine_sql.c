@@ -1633,7 +1633,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     }
     //#ifdef _PEP_SQLITE_DEBUG
     sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, session);
-    sqlite3_trace_v2(session->db, 
+    sqlite3_trace_v2(session->db,
                      SQLITE_TRACE_STMT | SQLITE_TRACE_ROW | SQLITE_TRACE_CLOSE,
                      sql_trace_callback,
                      session);
