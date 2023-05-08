@@ -252,7 +252,7 @@ PEP_STATUS pEp_backoff_state_finalize(
    making changes available to other concurrent database connections. */
 #define PEP_SQL_CHECKPOINT                                            \
     do {                                                              \
-        LOG_TRACE("do not really checkpoint");\
+        /*LOG_TRACE("do not really checkpoint");*/\
         /*PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_PASSIVE);       \
         PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_RESTART);*/       \
     } while (false)
