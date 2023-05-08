@@ -601,8 +601,8 @@ void release_transport_system(PEP_SESSION session, bool out_last);
  *
  *
  */
-void
-sql_reset_and_clear_bindings(sqlite3_stmt *s);
+//void
+//sql_reset_and_clear_bindings(sqlite3_stmt *s);
 
 /**
  *  @internal

@@ -447,6 +447,30 @@ int pEp_sqlite3_prepare_v3_nonbusy_nonlocked(PEP_SESSION session,
                                              sqlite3_stmt **ppStmt,
                                              const char **pzTail);
 
+
+/* Debugging
+ * ***************************************************************** */
+
+/* This should be a function and not a macro; but this definition is useful for
+   me to catch parameters as expressions, and the exact call sites. */
+#define sql_reset_and_clear_bindings(statement_p)           \
+    do {                                                    \
+        sqlite3_stmt *_sql_racb_statement = (statement_p);  \
+        /*PEP_ASSERT(_sql_racb_statement != NULL);*/        \
+        assert(_sql_racb_statement != NULL);                \
+        if (_sql_racb_statement == NULL) {                  \
+            fprintf(stderr, "%s:%i %s"                      \
+                    " sql_reset_and_clear_bindings: wrong:" \
+                    " %s is NULL\n",                        \
+                    __FILE__, __LINE__, __func__,           \
+                    # statement_p);                         \
+            abort();                                        \
+        }                                                   \
+        sqlite3_reset(_sql_racb_statement);                 \
+        sqlite3_clear_bindings(_sql_racb_statement);        \
+    } while (false)
+
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

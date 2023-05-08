@@ -21,7 +21,7 @@
 
 
 void
-sql_reset_and_clear_bindings(sqlite3_stmt *s)
+__sql_reset_and_clear_bindings(sqlite3_stmt *s)
 {
     assert(s != NULL);
 
