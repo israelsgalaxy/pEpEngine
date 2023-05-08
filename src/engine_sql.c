@@ -1716,22 +1716,21 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
 
     int int_result = SQLITE_OK;
 
-#define PREPARE(db_field_name, session_field_name)                          \
-    do {                                                                    \
-        LOG_TRACE("preparing %s (%s)",                                      \
-                  # session_field_name, # db_field_name, );                 \
-        int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(              \
-                        session,                                            \
-                        session->db_field_name,                             \
-                        sql_ ## session_field_name,                         \
-                        (int) strlen(sql_ ## session_field_name),           \
-                        & session->session_field_name,                      \
-                        NULL);                                              \
-        if (int_result != SQLITE_OK) {                                      \
-            LOG_CRITICAL("cannot initialise SQL statement");                \
-            LOG_CRITICAL("SQLite error: %s", sqlite3_errmsg(session->db));  \
-            return PEP_UNKNOWN_DB_ERROR;                                    \
-        }                                                                   \
+#define PREPARE(db_field_name, session_field_name)                              \
+    do {                                                                        \
+        LOG_TRACE("preparing %s (%s)", # session_field_name, # db_field_name, );\
+        int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(                  \
+                        session,                                                \
+                        session->db_field_name,                                 \
+                        sql_ ## session_field_name,                             \
+                        (int) strlen(sql_ ## session_field_name),               \
+                        & session->session_field_name,                          \
+                        NULL);                                                  \
+        if (int_result != SQLITE_OK) {                                          \
+            LOG_CRITICAL("cannot initialise SQL statement");                    \
+            LOG_CRITICAL("SQLite error: %s", sqlite3_errmsg(session->db));      \
+            return PEP_UNKNOWN_DB_ERROR;                                        \
+        }                                                                       \
     } while (false)
 
     /* Trustwords / system db. */
