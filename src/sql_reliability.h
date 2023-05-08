@@ -254,7 +254,6 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
    making changes available to other concurrent database connections. */
 #define PEP_SQL_CHECKPOINT                                            \
     do {                                                              \
-        LOG_TRACE("checkpointing...");                                \
         PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_PASSIVE);       \
         PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_RESTART);       \
     } while (false)
@@ -318,10 +317,10 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
             _pEp_sql_sqlite_begin_status                                        \
                 = sqlite3_step(session->begin_exclusive_transaction);           \
             if (_pEp_sql_sqlite_begin_status != SQLITE_DONE)                    \
-                LOG_NONOK("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION: loop with "     \
-                          "sqlite status %i (attempt %i)",                      \
-                          _pEp_sql_sqlite_begin_status,                         \
-                          _pEp_sql_backoff_state.failure_no + 1);               \
+                LOG_WARNING("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION: loop with "   \
+                            "sqlite status %i (attempt %i)",                    \
+                            _pEp_sql_sqlite_begin_status,                       \
+                            _pEp_sql_backoff_state.failure_no + 1);             \
         PEP_SQL_END_LOOP();                                                     \
         /* After this point we must have opened the transaction with success.   \
            Make sure something unexpected has not happened. */                  \
@@ -383,10 +382,10 @@ local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
             _pEp_sql_sqlite_end_status = sqlite3_step(_pEp_statement);          \
             PEP_ASSERT(_pEp_sql_sqlite_end_status != SQLITE_LOCKED);            \
             if (_pEp_sql_sqlite_end_status == SQLITE_BUSY)                      \
-                LOG_NONOK("PEP_SQL_%s_TRANSACTION: loop with sqlite status %i"  \
-                          " (attempt %i)",                                      \
-                          _pEp_action_name, _pEp_sql_sqlite_end_status,         \
-                          _pEp_sql_backoff_state.failure_no  + 1);              \
+                LOG_WARNING("PEP_SQL_%s_TRANSACTION: loop with sqlite status %i"\
+                            " (attempt %i)",                                    \
+                            _pEp_action_name, _pEp_sql_sqlite_end_status,       \
+                            _pEp_sql_backoff_state.failure_no  + 1);            \
         PEP_SQL_END_LOOP();                                                     \
         if (_pEp_sql_sqlite_end_status != SQLITE_DONE)                          \
             LOG_ERROR("UNEXPECTED error on %s: %i %s", _pEp_action_name,        \
