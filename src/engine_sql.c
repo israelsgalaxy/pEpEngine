@@ -272,6 +272,7 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
             break;
 
         if (strcmp(table_name, "identity") == 0) {
+            PEP_SQL_BEGIN_LOOP(int_result);
             int_result = sqlite3_exec(session->db,
                                       "PRAGMA foreign_keys=off;\n"
                                       "BEGIN TRANSACTION;\n"
@@ -301,8 +302,10 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
             );
             if (int_result != SQLITE_OK)
                 return PEP_UNKNOWN_DB_ERROR;
+            PEP_SQL_END_LOOP();
         }
         else if (strcmp(table_name, "trust") == 0) {
+            PEP_SQL_BEGIN_LOOP(int_result);
             int_result = sqlite3_exec(session->db,
                                       "PRAGMA foreign_keys=off;\n"
                                       "BEGIN TRANSACTION;\n"
@@ -327,10 +330,12 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
                                       NULL,
                                       NULL
             );
+            PEP_SQL_END_LOOP();
             if (int_result != SQLITE_OK)
                 return PEP_UNKNOWN_DB_ERROR;
         }
         else if (strcmp(table_name, "alternate_user_id") == 0) {
+            PEP_SQL_BEGIN_LOOP(int_result);
             int_result = sqlite3_exec(session->db,
                                       "PRAGMA foreign_keys=off;\n"
                                       "BEGIN TRANSACTION;\n"
@@ -349,10 +354,12 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
                                       NULL,
                                       NULL
             );
+            PEP_SQL_END_LOOP();
             if (int_result != SQLITE_OK)
                 return PEP_UNKNOWN_DB_ERROR;
         }
         else if (strcmp(table_name, "revocation_contact_list") == 0) {
+            PEP_SQL_BEGIN_LOOP(int_result);
             int_result = sqlite3_exec(session->db,
                                       "PRAGMA foreign_keys=off;\n"
                                       "BEGIN TRANSACTION;\n"
@@ -374,10 +381,12 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
                                       NULL,
                                       NULL
             );
+            PEP_SQL_END_LOOP();
             if (int_result != SQLITE_OK)
                 return PEP_UNKNOWN_DB_ERROR;
         }
         else if (strcmp(table_name, "social_graph")) {
+            PEP_SQL_BEGIN_LOOP(int_result);
             int_result = sqlite3_exec(session->db,
                                       "PRAGMA foreign_keys=off;\n"
                                       "BEGIN TRANSACTION;\n"
@@ -400,19 +409,22 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
                                       NULL,
                                       NULL
             );
+            PEP_SQL_END_LOOP();
             if (int_result != SQLITE_OK)
                 return PEP_UNKNOWN_DB_ERROR;
         }
     }
 
-    int_result = sqlite3_exec(
+    PEP_SQL_BEGIN_LOOP(int_result);
+        int_result = sqlite3_exec(
             session->db,
             "PRAGMA foreign_key_check;\n"
             ,
             NULL,
             NULL,
             NULL
-    );
+        );
+    PEP_SQL_END_LOOP();
     if (int_result != SQLITE_OK)
         return PEP_UNKNOWN_DB_ERROR;
 
@@ -446,6 +458,7 @@ static PEP_STATUS upgrade_revoc_contact_to_13(PEP_SESSION session) {
 
     // Note: the check upfront is to deal with partially-upgraded DB issues
     if (!table_contains_column(session, "revocation_contact_list", "own_address")) {
+        PEP_SQL_BEGIN_LOOP(int_result);
         int_result = sqlite3_exec(
                 session->db,
                 "alter table revocation_contact_list\n"
@@ -454,6 +467,7 @@ static PEP_STATUS upgrade_revoc_contact_to_13(PEP_SESSION session) {
                 NULL,
                 NULL
         );
+        PEP_SQL_END_LOOP();
         PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK,
                                       PEP_UNKNOWN_DB_ERROR);
     }
@@ -525,6 +539,7 @@ static PEP_STATUS upgrade_revoc_contact_to_13(PEP_SESSION session) {
     }
     sqlite3_finalize(update_revoked_w_addr_stmt);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "delete from revocation_contact_list where own_address is NULL;\n"
@@ -557,7 +572,7 @@ static PEP_STATUS upgrade_revoc_contact_to_13(PEP_SESSION session) {
             NULL,
             NULL
     );
-
+    PEP_SQL_END_LOOP();
 
     if (int_result != SQLITE_OK)
         return PEP_UNKNOWN_DB_ERROR;
@@ -590,7 +605,9 @@ static int user_version(void *_version, int count, char **text, char **name)
 }
 
 static PEP_STATUS _create_initial_tables(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "create table if not exists version_info (\n"
             "   id integer primary key,\n"
@@ -602,10 +619,12 @@ static PEP_STATUS _create_initial_tables(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     // This string is now too large for the C standard, so we're going to break it up some.
     // I presume we use the enormous string for performance purposes... terrible for debugging purposes, but OK.
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "PRAGMA application_id = 0x23423423;\n"
@@ -624,13 +643,16 @@ static PEP_STATUS _create_initial_tables(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _create_core_tables(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "create table if not exists pgp_keypair (\n"
             "   fpr text primary key,\n"
@@ -689,6 +711,7 @@ static PEP_STATUS _create_core_tables(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -698,7 +721,9 @@ static PEP_STATUS _create_group_tables(PEP_SESSION session) {
     if (!session)
         return PEP_ILLEGAL_VALUE;
 
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             // group information
             "create table if not exists groups (\n"
@@ -751,13 +776,16 @@ static PEP_STATUS _create_group_tables(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _create_supplementary_key_tables(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "create table if not exists revoked_keys (\n"
             "   revoked_fpr text primary key,\n"
@@ -795,13 +823,16 @@ static PEP_STATUS _create_supplementary_key_tables(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _create_misc_admin_tables(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
         session->db,
         // sequences
         "create table if not exists sequences(\n"
@@ -819,6 +850,7 @@ static PEP_STATUS _create_misc_admin_tables(PEP_SESSION session) {
         NULL,
         NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -856,13 +888,16 @@ PEP_STATUS create_tables(PEP_SESSION session) {
 }
 
 PEP_STATUS get_db_user_version(PEP_SESSION session, int* version) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "pragma user_version;",
             user_version,
             version,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -925,6 +960,7 @@ static PEP_STATUS _verify_version(PEP_SESSION session, int* version) {
         strlcat(query, verbuf, query_size);
         strlcat(query, ";", query_size);
 
+        PEP_SQL_BEGIN_LOOP(int_result);
         int_result = sqlite3_exec(
                 session->db,
                 query,
@@ -932,6 +968,7 @@ static PEP_STATUS _verify_version(PEP_SESSION session, int* version) {
                 &*version,
                 NULL
         );
+        PEP_SQL_END_LOOP();
         free(query);
     }
 
@@ -941,8 +978,9 @@ static PEP_STATUS _verify_version(PEP_SESSION session, int* version) {
 
 static PEP_STATUS _upgrade_DB_to_ver_2(PEP_SESSION session) {
     // N.B. addition of device_group column removed in DDL v10
-    int int_result __attribute__((__unused__))
-      = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "alter table pgp_keypair\n"
             "   add column flags integer default 0;\n",
@@ -952,21 +990,26 @@ static PEP_STATUS _upgrade_DB_to_ver_2(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_5(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "delete from pgp_keypair where fpr = '';",
             NULL,
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "delete from trust where pgp_keypair_fpr = '';",
@@ -974,13 +1017,16 @@ static PEP_STATUS _upgrade_DB_to_ver_5(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "alter table identity\n"
             "   add column is_own integer default 0;\n",
@@ -988,8 +1034,10 @@ static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "update identity\n"
@@ -999,12 +1047,14 @@ static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     // Turns out that just adding "on update cascade" in
     // sqlite is a PITA. We need to be able to cascade
     // person->id replacements (for temp ids like "TOFU_")
     // so here we go...
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "PRAGMA foreign_keys=off;\n"
@@ -1054,8 +1104,10 @@ static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "PRAGMA foreign_key_check;\n",
@@ -1063,6 +1115,7 @@ static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     // FIXME: foreign key check here
@@ -1072,7 +1125,9 @@ static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_7(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "alter table person\n"
             "   add column is_pEp_user integer default 0;\n",
@@ -1080,8 +1135,10 @@ static PEP_STATUS _upgrade_DB_to_ver_7(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "update person\n"
@@ -1097,8 +1154,10 @@ static PEP_STATUS _upgrade_DB_to_ver_7(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "create table if not exists mistrusted_keys (\n"
@@ -1108,13 +1167,16 @@ static PEP_STATUS _upgrade_DB_to_ver_7(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_8(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "PRAGMA foreign_keys=off;\n"
             "BEGIN TRANSACTION;\n"
@@ -1148,8 +1210,10 @@ static PEP_STATUS _upgrade_DB_to_ver_8(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "PRAGMA foreign_key_check;\n",
@@ -1157,6 +1221,7 @@ static PEP_STATUS _upgrade_DB_to_ver_8(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     // FIXME: foreign key check
@@ -1167,7 +1232,9 @@ static PEP_STATUS _upgrade_DB_to_ver_8(PEP_SESSION session) {
 
 
 static PEP_STATUS _upgrade_DB_to_ver_9(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "create table if not exists social_graph (\n"
             "    own_userid text,\n"
@@ -1190,13 +1257,16 @@ static PEP_STATUS _upgrade_DB_to_ver_9(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_10(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "PRAGMA foreign_keys=off;\n"
             "BEGIN TRANSACTION;\n"
@@ -1226,8 +1296,10 @@ static PEP_STATUS _upgrade_DB_to_ver_10(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "PRAGMA foreign_key_check;\n",
@@ -1235,6 +1307,7 @@ static PEP_STATUS _upgrade_DB_to_ver_10(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -1305,6 +1378,7 @@ static PEP_STATUS _force_upgrade_own_latest_protocol_version(PEP_SESSION session
     snprintf(version_upgrade_stmt, new_stringlen + 1, "%s%s%s%s%s",
              version_upgrade_startstr, major_buf, version_upgrade_midstr, minor_buf, version_upgrade_endstr);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             version_upgrade_stmt,
@@ -1312,6 +1386,7 @@ static PEP_STATUS _force_upgrade_own_latest_protocol_version(PEP_SESSION session
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
 
  end:
     free(version_upgrade_stmt);
@@ -1324,15 +1399,19 @@ static PEP_STATUS _force_upgrade_own_latest_protocol_version(PEP_SESSION session
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_12(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "create index if not exists identity_userid_addr on identity(address, user_id);\n",
             NULL,
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "alter table identity\n"
@@ -1343,8 +1422,10 @@ static PEP_STATUS _upgrade_DB_to_ver_12(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
+    PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
             session->db,
             "update identity\n"
@@ -1358,6 +1439,7 @@ static PEP_STATUS _upgrade_DB_to_ver_12(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -1366,7 +1448,9 @@ static PEP_STATUS _upgrade_DB_to_ver_12(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_14(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "alter table identity\n"
             "   add column enc_format integer default 0;\n",
@@ -1374,6 +1458,7 @@ static PEP_STATUS _upgrade_DB_to_ver_14(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -1384,7 +1469,9 @@ static PEP_STATUS _upgrade_DB_to_ver_15(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_16(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
         session->db,
         "alter table trust\n"
         "   add column sticky integer default 0;\n",
@@ -1392,13 +1479,16 @@ static PEP_STATUS _upgrade_DB_to_ver_16(PEP_SESSION session) {
         NULL,
         NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_17(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "alter table identity\n"
             "   add column username;\n",
@@ -1406,6 +1496,7 @@ static PEP_STATUS _upgrade_DB_to_ver_17(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -1414,7 +1505,9 @@ static PEP_STATUS _upgrade_DB_to_ver_17(PEP_SESSION session) {
 // Version 2.0 and earlier will now no longer be supported with other
 // pEp users.
 static PEP_STATUS _upgrade_DB_to_ver_18(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             "update identity\n"
             "   set pEp_version_major = 2,\n"
@@ -1428,13 +1521,16 @@ static PEP_STATUS _upgrade_DB_to_ver_18(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return _force_upgrade_own_latest_protocol_version(session);
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_19(PEP_SESSION session) {
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
             session->db,
             /* This index was useless: it was an index on the (multi-column)
                primary key, always implemented using an index which gets also
@@ -1446,6 +1542,7 @@ static PEP_STATUS _upgrade_DB_to_ver_19(PEP_SESSION session) {
             NULL,
             NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     return PEP_STATUS_OK;
@@ -1619,16 +1716,18 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
         }
 
         if (version < atoi(_DDL_USER_VERSION)) {
-            int_result = sqlite3_exec(
-                session->db,
-                "pragma user_version = "_DDL_USER_VERSION";\n"
-                "insert or replace into version_info (id, version)"
-                "values (1, '" PEP_ENGINE_VERSION "');",
-                NULL,
-                NULL,
-                NULL);
-            if(int_result != SQLITE_OK)
-                FAIL(PEP_UNKNOWN_DB_ERROR);
+            PEP_SQL_BEGIN_LOOP(int_result);
+                int_result = sqlite3_exec(
+                    session->db,
+                    "pragma user_version = "_DDL_USER_VERSION";\n"
+                    "insert or replace into version_info (id, version)"
+                    "values (1, '" PEP_ENGINE_VERSION "');",
+                    NULL,
+                    NULL,
+                    NULL);
+                if(int_result != SQLITE_OK)
+                    FAIL(PEP_UNKNOWN_DB_ERROR);
+            PEP_SQL_END_LOOP();
         }
     }
     //#ifdef _PEP_SQLITE_DEBUG
@@ -1652,7 +1751,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     /* Perform some expensive SQL operations, for which we do not need to worry
        about concurrency. */
     if (first_session_only) {
-        do {
+        PEP_SQL_BEGIN_LOOP(int_result);
             int_result = sqlite3_exec(session->db,
                                       "PRAGMA integrity_check;\n"
                                       "PRAGMA optimize;\n"
@@ -1666,7 +1765,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
                 LOG_NONOK("failed executing early first-session SQLite"
                           " statements: %i %s",
                           int_result, sqlite3_errmsg(session->db));
-        } while (int_result != SQLITE_OK);
+        PEP_SQL_END_LOOP();
         //if(int_result != SQLITE_OK)
         //    FAIL(PEP_UNKNOWN_DB_ERROR);
     }
@@ -1674,7 +1773,6 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     /* Set database pragmas; I am not sure if some of them only affect one
        connection. */
     PEP_SQL_BEGIN_LOOP(int_result);
-    //do {
         int_result = sqlite3_exec(session->db,
                                   "PRAGMA locking_mode=NORMAL;\n"
                                   "PRAGMA foreign_key=ON;\n"
@@ -1684,7 +1782,6 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
             LOG_NONOK("failed executing early SQLite statements: %i %s",
                       int_result, sqlite3_errmsg(session->db));
         }
-    //} while (int_result != SQLITE_OK);
     PEP_SQL_END_LOOP();
     //if(int_result != SQLITE_OK)
     //    FAIL(PEP_UNKNOWN_DB_ERROR);
