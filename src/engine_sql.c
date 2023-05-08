@@ -1675,6 +1675,12 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
         //    FAIL(PEP_UNKNOWN_DB_ERROR);
     }
 
+    if (first_session_only)
+        LOG_TRACE("database initialised successfully from the FIRST session");
+    else
+        LOG_TRACE("database initialised successfully from a session which"
+                  " is NOT the first");
+
  end:
     LOG_NONOK_STATUS_CRITICAL;
     return status;
