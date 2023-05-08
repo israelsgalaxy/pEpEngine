@@ -1608,15 +1608,6 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
             NULL);
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
-    int_result = sqlite3_exec(
-            session->db,
-            "pragma foreign_keys=ON;\n",
-            NULL,
-            NULL,
-            NULL
-    );
-    PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
-
     if (version > atoi(_DDL_USER_VERSION)) {
         // This is *explicitly* not allowed.
         return PEP_INIT_DB_DOWNGRADE_VIOLATION;
@@ -1666,10 +1657,15 @@ PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
     PEP_STATUS status = PEP_STATUS_OK;
 
     int int_result = SQLITE_OK;
+    int_result = sqlite3_exec(session->db,
+                              "PRAGMA locking_mode=NORMAL;\n"
+                              "PRAGMA journal_mode=WAL;\n"
+                              "PRAGMA foreign_key=ON;\n",
+                              NULL, NULL, NULL);
+    PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
+
     do {
         int_result = sqlite3_exec(session->db,
-                                  "PRAGMA locking_mode=NORMAL;\n"
-                                  "PRAGMA journal_mode=WAL;\n"
                                   "VACUUM\n",
                                   NULL, NULL, NULL);
         if (int_result != SQLITE_OK)
