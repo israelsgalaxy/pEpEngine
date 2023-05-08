@@ -1928,7 +1928,7 @@ DYNAMIC_API PEP_STATUS group_create(
             goto pEp_error; // We can do this because we are BEFORE the start of the transaction!!!
     }
 
-    sqlite3_exec(session->db, "BEGIN TRANSACTION ;", NULL, NULL, NULL);
+    PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION();
 
     status = create_group_entry(session, _group);
 
@@ -1965,10 +1965,10 @@ DYNAMIC_API PEP_STATUS group_create(
 
 
     if (status != PEP_STATUS_OK) {
-        sqlite3_exec(session->db, "ROLLBACK ;", NULL, NULL, NULL);
+        PEP_SQL_ROLLBACK_TRANSACTION();
         goto pEp_error;
     }
-    sqlite3_exec(session->db, "COMMIT ;", NULL, NULL, NULL);
+    PEP_SQL_COMMIT_TRANSACTION();
 
     // Ok, mail em.
     if (is_me(session, manager))

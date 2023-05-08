@@ -95,11 +95,13 @@ static PEP_STATUS upgrade_add_echo_challange_field(PEP_SESSION session) {
 
     /* Alter the table.  This is executed only once at initialisation time,
        so keeping the SQL statement prepared would be counter-productive. */
-    int sql_status
-        = sqlite3_exec(session->db,
-                       " ALTER TABLE Identity"
-                       " ADD COLUMN echo_challenge BLOB;"
-                       , NULL, NULL, NULL);
+    int sql_status = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(sql_status);
+    sql_status = sqlite3_exec(session->db,
+                              " ALTER TABLE Identity"
+                              " ADD COLUMN echo_challenge BLOB;"
+                              , NULL, NULL, NULL);
+    PEP_SQL_END_LOOP();
     switch (sql_status) {
     case SQLITE_OK:
         /* Upgrading was successful. */
@@ -128,11 +130,14 @@ static PEP_STATUS upgrade_add_echo_last_echo_timestamp_field(
 
     /* Alter the table.  This is executed only once at initialisation time,
        so keeping the SQL statement prepared would be counter-productive. */
-    int sql_status
+    int sql_status = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(sql_status);
+    sql_status
         = sqlite3_exec(session->db,
                        " ALTER TABLE Identity"
                        " ADD COLUMN last_echo_timestamp INTEGER DEFAULT NULL;"
                        , NULL, NULL, NULL);
+    PEP_SQL_END_LOOP();
     switch (sql_status) {
     case SQLITE_OK:
         /* Upgrading was successful. */
