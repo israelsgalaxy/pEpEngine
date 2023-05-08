@@ -105,7 +105,8 @@ PEP_STATUS pEp_back_off(PEP_SESSION session,
 
     /* Very easy: sleep, and bump. */
     long sleep_time_in_ms = pEp_backoff_compute_sleep_time(session, s);
-    pEp_sleep_ms(sleep_time_in_ms);
+    if (sleep_time_in_ms != 0)
+        pEp_sleep_ms(sleep_time_in_ms);
     pEp_backoff_bump(session, s, sleep_time_in_ms);
 
     return PEP_STATUS_OK;
