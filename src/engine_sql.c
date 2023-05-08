@@ -1639,17 +1639,16 @@ PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
     } while (false)
 
     int int_result = SQLITE_OK;
-    int_result = pEp_open_local_database(session, 0);
+    if (session->db == NULL)
+        int_result = pEp_open_local_database(session, 0);
     if (int_result != SQLITE_OK)
         FAIL(PEP_INIT_CANNOT_OPEN_DB);
 
-    int_result = sqlite3_open_v2(
-            SYSTEM_DB, &session->system_db,
-            SQLITE_OPEN_READONLY
-            | SQLITE_OPEN_FULLMUTEX
-            | SQLITE_OPEN_SHAREDCACHE,
-            NULL
-    );
+    int_result = sqlite3_open_v2(SYSTEM_DB, &session->system_db,
+                                 SQLITE_OPEN_READONLY
+                                 | SQLITE_OPEN_FULLMUTEX
+                                 | SQLITE_OPEN_SHAREDCACHE,
+                                 NULL);
     if (int_result != SQLITE_OK)
         FAIL(PEP_INIT_CANNOT_OPEN_SYSTEM_DB);
 
