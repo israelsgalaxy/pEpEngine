@@ -125,18 +125,14 @@ DYNAMIC_API PEP_STATUS init(
 
     /* Initialise the management and system databases, but not the log database
        (which has been initialised already if needed). */
-    if (in_first) {
-        status = pEp_sql_init_first_session_only(_session);
-        if (status != PEP_STATUS_OK)
-            goto pEp_error;
-
-        // We need to init a few globals for message id that we'd rather not
-        // calculate more than once.
-        _init_globals();
-    }
-    status = pEp_sql_init_any_session(_session);
+    status = pEp_sql_init(_session, in_first);
     if (status != PEP_STATUS_OK)
         goto pEp_error;
+
+    // We need to init a few globals for message id that we'd rather not
+    // calculate more than once.
+    if (in_first)
+        _init_globals();
 
     status = pEp_prepare_sql_stmts(_session);
     if (status != PEP_STATUS_OK)

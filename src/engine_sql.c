@@ -1543,7 +1543,8 @@ static int pEp_open_local_database(PEP_SESSION session,
                            NULL);
 }
 
-PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
+PEP_STATUS pEp_sql_init(PEP_SESSION session,
+                        bool first_session_only) {
     PEP_REQUIRE(session);
     PEP_STATUS status = PEP_STATUS_OK;
     bool very_first __attribute__((__unused__)) = false;
@@ -1554,19 +1555,24 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
         goto end;               \
     } while (false)
 
+    /* Open a database connection. */
     int int_result = SQLITE_OK;
-    int_result = pEp_open_local_database(session, SQLITE_OPEN_CREATE);
+    int_result = pEp_open_local_database(session, (first_session_only
+                                                   ? SQLITE_OPEN_CREATE
+                                                   : 0));
     if (int_result != SQLITE_OK)
         FAIL(PEP_INIT_CANNOT_OPEN_DB);
 
-    status = create_tables(session);
-    if (status != PEP_STATUS_OK)
-        FAIL(status);
-
+    /* Make the schema, when needed. */
     int version = 0;
-    status = get_db_user_version(session, &version);
-    if (status != PEP_STATUS_OK)
-        FAIL(status);
+    if (first_session_only) {
+        status = create_tables(session);
+        if (status != PEP_STATUS_OK)
+            FAIL(status);
+        status = get_db_user_version(session, &version);
+        if (status != PEP_STATUS_OK)
+            FAIL(status);
+    }
 
     void (*xFunc_lower)(sqlite3_context *, int, sqlite3_value **) = &_sql_lower;
     int_result = sqlite3_create_function_v2(
@@ -1581,68 +1587,55 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
             NULL);
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
-    if (version > atoi(_DDL_USER_VERSION)) {
-        // This is *explicitly* not allowed.
-        FAIL(PEP_INIT_DB_DOWNGRADE_VIOLATION);
-    }
+    /* Update the schema, if needed. */
+    if (first_session_only) {
+        if (version == 1) {
+            // Sometimes the user_version wasn't set correctly.
+            status = _verify_version(session, &version);
+            if (status != PEP_STATUS_OK)
+                FAIL(PEP_ILLEGAL_VALUE);
+        }
 
-    if (version == 1) {
-        // Sometimes the user_version wasn't set correctly.
-        status = _verify_version(session, &version);
-        if (status != PEP_STATUS_OK)
-            FAIL(PEP_ILLEGAL_VALUE);
-    }
+        if (version > atoi(_DDL_USER_VERSION))
+            // This is *explicitly* not allowed.
+            FAIL(PEP_INIT_DB_DOWNGRADE_VIOLATION);
+        if (version != 0) {
+            // Version has been already set
 
-    if (version != 0) {
-        // Version has been already set
+            // Early mistake : version 0 shouldn't have existed.
+            // Numbering should have started at 1 to detect newly created DB.
+            // Version 0 DBs are not anymore compatible.
+            status = _check_and_execute_upgrades(session, version);
+            if (status != PEP_STATUS_OK)
+                FAIL(PEP_ILLEGAL_VALUE);
+        } else {
+            // Version from DB was 0, it means this is initial setup.
+            // DB has just been created, and all tables are empty.
+            very_first = true;
+        }
 
-        // Early mistake : version 0 shouldn't have existed.
-        // Numbering should have started at 1 to detect newly created DB.
-        // Version 0 DBs are not anymore compatible.
-        status = _check_and_execute_upgrades(session, version);
-        if (status != PEP_STATUS_OK)
-            FAIL(PEP_ILLEGAL_VALUE);
-    } else {
-        // Version from DB was 0, it means this is initial setup.
-        // DB has just been created, and all tables are empty.
-        very_first = true;
-    }
-
-    if (version < atoi(_DDL_USER_VERSION)) {
-        int_result = sqlite3_exec(
+        if (version < atoi(_DDL_USER_VERSION)) {
+            int_result = sqlite3_exec(
                 session->db,
                 "pragma user_version = "_DDL_USER_VERSION";\n"
                 "insert or replace into version_info (id, version)"
                 "values (1, '" PEP_ENGINE_VERSION "');",
                 NULL,
                 NULL,
-                NULL
-        );
-        PEP_WEAK_ASSERT_ORELSE(int_result == SQLITE_OK,
-                               FAIL(PEP_UNKNOWN_DB_ERROR));
+                NULL);
+            if(int_result != SQLITE_OK)
+                FAIL(PEP_UNKNOWN_DB_ERROR);
+        }
     }
- end:
-    LOG_NONOK_STATUS_CRITICAL;
-    return status;
-#undef FAIL
-}
+    //#ifdef _PEP_SQLITE_DEBUG
+    sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, session);
+    sqlite3_trace_v2(session->db, 
+                     SQLITE_TRACE_STMT | SQLITE_TRACE_ROW | SQLITE_TRACE_CLOSE,
+                     sql_trace_callback,
+                     session);
+    //#endif
 
-PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
-    PEP_REQUIRE(session);
-    PEP_STATUS status = PEP_STATUS_OK;
-
-#define FAIL(the_status)        \
-    do {                        \
-        status = (the_status);  \
-        goto end;               \
-    } while (false)
-
-    int int_result = SQLITE_OK;
-    if (session->db == NULL)
-        int_result = pEp_open_local_database(session, 0);
-    if (int_result != SQLITE_OK)
-        FAIL(PEP_INIT_CANNOT_OPEN_DB);
-
+    /* Open the system database. */
     PEP_ASSERT(session->system_db == NULL);
     int_result = sqlite3_open_v2(SYSTEM_DB, &session->system_db,
                                  SQLITE_OPEN_READONLY
@@ -1652,45 +1645,40 @@ PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
     if (int_result != SQLITE_OK)
         FAIL(PEP_INIT_CANNOT_OPEN_SYSTEM_DB);
 
+    /* Set database pragmas; I am not sure if some of them only affect one
+       connection. */
     int_result = sqlite3_exec(session->db,
                               "PRAGMA locking_mode=NORMAL;\n"
                               "PRAGMA journal_mode=WAL;\n"
                               "PRAGMA foreign_key=ON;\n",
                               NULL, NULL, NULL);
-    PEP_WEAK_ASSERT_ORELSE(int_result == SQLITE_OK,
-                           FAIL(PEP_UNKNOWN_DB_ERROR));
-
+    if(int_result != SQLITE_OK)
+        FAIL(PEP_UNKNOWN_DB_ERROR);
     /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
        here, setting the busy wait time to 5 seconds.  I removed it.  We are now
        handling SQLITE_BUSY through the functionality in sql_reliabiliy.h and
        sql_reliabiliy.c . */
     sqlite3_busy_timeout(session->db, 0);
 
-//#ifdef _PEP_SQLITE_DEBUG
-    sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, session);
-//#endif
-    //#ifdef _PEP_SQLITE_DEBUG
-    sqlite3_trace_v2(session->db, 
-        SQLITE_TRACE_STMT | SQLITE_TRACE_ROW | SQLITE_TRACE_CLOSE,
-        sql_trace_callback,
-        session);
-//#endif
 
-    do {
-        int_result = sqlite3_exec(session->db,
-                                  "VACUUM\n",
-                                  NULL, NULL, NULL);
-        if (int_result != SQLITE_OK)
-            LOG_NONOK("failed executing early SQLite statements: %i %s",
-                      int_result, sqlite3_errmsg(session->db));
-    } while (int_result != SQLITE_OK);
+    if (first_session_only) {
+        do {
+            int_result = sqlite3_exec(session->db,
+                                      "VACUUM\n",
+                                      NULL, NULL, NULL);
+            if (int_result != SQLITE_OK)
+                LOG_NONOK("failed executing early SQLite statements: %i %s",
+                          int_result, sqlite3_errmsg(session->db));
+        } while (int_result != SQLITE_OK);
+        //if(int_result != SQLITE_OK)
+        //    FAIL(PEP_UNKNOWN_DB_ERROR);
+    }
 
-end:
+ end:
     LOG_NONOK_STATUS_CRITICAL;
     return status;
 #undef FAIL
 }
-
 
 // This whole mess really does need to be generated somewhere.
 PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
