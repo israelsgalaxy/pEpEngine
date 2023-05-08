@@ -1650,8 +1650,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     int_result = sqlite3_exec(session->db,
                               "PRAGMA locking_mode=NORMAL;\n"
                               "PRAGMA journal_mode=WAL;\n"
-                              "PRAGMA foreign_key=ON;"
-                              "foobarquux\n",
+                              "PRAGMA foreign_key=ON;\n"
+                              "",
                               NULL, NULL, NULL);
     if(int_result != SQLITE_OK)
         FAIL(PEP_UNKNOWN_DB_ERROR);
@@ -1666,7 +1666,9 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     if (first_session_only) {
         do {
             int_result = sqlite3_exec(session->db,
-                                      "VACUUM\n",
+                                      "PRAGMA optimize;\n"
+                                      "VACUUM;\n"
+                                      "PRAGMA wal_checkpoint(DELETE);\n",
                                       NULL, NULL, NULL);
             if (int_result != SQLITE_OK)
                 LOG_NONOK("failed executing early SQLite statements: %i %s",
