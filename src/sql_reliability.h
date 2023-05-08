@@ -195,7 +195,8 @@ PEP_STATUS pEp_backoff_state_finalize(
         bool _pEp_sql_run_the_inner_loop_body_once_more = true;                 \
         * _pEp_sql_sqlite_status_address = SQLITE_OK;                           \
         do { /* Inner loop beginning... */                                      \
-            /* After the expansion of this macro comes the user C code to be    \
+PEP_SQL_CHECKPOINT; /* FIXME: almost certainly excessive. */\
+            /* After the expansion of this macro comes the user C code to be            \
                tried multiple times.  Looking at macroexpanded the user C code  \
                will appear inside this inner loop... */                         \
             { /* user code beginning... */
