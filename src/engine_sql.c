@@ -1645,26 +1645,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     if (int_result != SQLITE_OK)
         FAIL(PEP_INIT_CANNOT_OPEN_SYSTEM_DB);
 
-    /* Set database pragmas; I am not sure if some of them only affect one
-       connection. */
-    int_result = sqlite3_exec(session->db,
-                              "PRAGMA locking_mode=NORMAL;\n"
-                              "PRAGMA journal_mode=WAL;\n"
-                              "PRAGMA journal_mode=DELETE;\n" "PRAGMA synchronous=extra;\n"
-                              "PRAGMA foreign_key=ON;\n"
-                              "PRAGMA wal_autocheckpoint=1;\n"
-                              "",
-                              NULL, NULL, NULL);
-    if(int_result != SQLITE_OK)
-        FAIL(PEP_UNKNOWN_DB_ERROR);
-    /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
-       here, setting the busy wait time to 5 seconds.  I removed it.  We are now
-       handling SQLITE_BUSY through the functionality in sql_reliabiliy.h and
-       sql_reliabiliy.c . */
-    //sqlite3_busy_timeout(session->db, 0);
-    sqlite3_busy_timeout(session->db, 5000);
-
-
+    /* Perform some expensive SQL operations, for which we do not need to worry
+       about concurrency. */
     if (first_session_only) {
         do {
             int_result = sqlite3_exec(session->db,
@@ -1681,6 +1663,30 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
         //    FAIL(PEP_UNKNOWN_DB_ERROR);
     }
 
+    /* Set database pragmas; I am not sure if some of them only affect one
+       connection. */
+    do {
+        int_result = sqlite3_exec(session->db,
+                                  "PRAGMA locking_mode=NORMAL;\n"
+                                  "PRAGMA journal_mode=WAL;\n"
+                                  "PRAGMA journal_mode=DELETE;\n" "PRAGMA synchronous=extra;\n"
+                                  "PRAGMA foreign_key=ON;\n"
+                                  "PRAGMA wal_autocheckpoint=1;\n"
+                                  "",
+                                  NULL, NULL, NULL);
+        if (int_result != SQLITE_OK)
+            LOG_NONOK("failed executing early SQLite statements: %i %s",
+                      int_result, sqlite3_errmsg(session->db));
+    } while (int_result != SQLITE_OK);
+    //if(int_result != SQLITE_OK)
+    //    FAIL(PEP_UNKNOWN_DB_ERROR);
+    /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
+       here, setting the busy wait time to 5 seconds.  I removed it.  We are now
+       handling SQLITE_BUSY through the functionality in sql_reliabiliy.h and
+       sql_reliabiliy.c . */
+    sqlite3_busy_timeout(session->db, 0);
+    //sqlite3_busy_timeout(session->db, 5000);
+
     if (first_session_only)
         LOG_TRACE("database initialised successfully from the FIRST session");
     else
@@ -1690,8 +1696,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
  end:
     LOG_NONOK_STATUS_CRITICAL;
     if (status != PEP_STATUS_OK)
-        LOG_ERROR("SQLite code is %i %s", int_result,
-                  sqlite3_errmsg(session->db));
+        LOG_CRITICAL("SQLite code is %i %s", int_result,
+                     sqlite3_errmsg(session->db));
 
     return status;
 #undef FAIL
