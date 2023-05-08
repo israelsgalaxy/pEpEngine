@@ -1718,8 +1718,8 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
 
 #define PREPARE(db_field_name, session_field_name)                          \
     do {                                                                    \
-        LOG_TRACE("preparing SQL statement %s for %s",                      \
-                  # db_field_name, # session_field_name);                   \
+        LOG_TRACE("preparing %s (%s)",                                      \
+                  # session_field_name, # db_field_name, );                 \
         int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(              \
                         session,                                            \
                         session->db_field_name,                             \
