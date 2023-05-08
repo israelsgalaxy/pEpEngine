@@ -1689,6 +1689,9 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
 
  end:
     LOG_NONOK_STATUS_CRITICAL;
+    if (status != PEP_STATUS_OK)
+        LOG_ERROR("SQLite code is %i %s", int_result, sqlite3_errmsg(session->db));
+
     return status;
 #undef FAIL
 }
