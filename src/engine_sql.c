@@ -43,7 +43,7 @@ static void _sql_lower(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
     }
 }
 
-#ifdef _PEP_SQLITE_DEBUG
+//#ifdef _PEP_SQLITE_DEBUG
 /**
  *  @internal
  *
@@ -52,15 +52,17 @@ static void _sql_lower(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
  *  @brief            TODO
  *
  *  @param[in]    trace_constant        unsigned
- *  @param[in]    *context_ptr        void
+ *  @param[in]    *context_ptr          the session
  *  @param[in]    *P        void
  *  @param[in]    *X        void
  *
  */
 int sql_trace_callback (unsigned trace_constant,
-                        void* context_ptr,
+                        void *session_as_context_ptr,
                         void* P,
                         void* X) {
+    PEP_SESSION session = (PEP_SESSION) session_as_context_ptr;
+    PEP_REQUIRE_ORELSE(session, {return 0;});
     switch (trace_constant) {
         case SQLITE_TRACE_STMT:
             fprintf(stderr, "SQL_DEBUG: STMT - ");
@@ -82,7 +84,7 @@ int sql_trace_callback (unsigned trace_constant,
     }
     return 0;
 }
-#endif
+//#endif
 
 /**
  *  @internal
@@ -616,12 +618,12 @@ PEP_STATUS init_databases(PEP_SESSION session) {
        sql_reliabiliy.c . */
     sqlite3_busy_timeout(session->db, 0);
 
-#ifdef _PEP_SQLITE_DEBUG
+//#ifdef _PEP_SQLITE_DEBUG
     sqlite3_trace_v2(session->db, 
         SQLITE_TRACE_STMT | SQLITE_TRACE_ROW | SQLITE_TRACE_CLOSE,
         sql_trace_callback,
-        NULL);
-#endif
+        session);
+//#endif
 
     PEP_WEAK_ASSERT_ORELSE_RETURN(SYSTEM_DB, PEP_INIT_CANNOT_OPEN_SYSTEM_DB);
 
