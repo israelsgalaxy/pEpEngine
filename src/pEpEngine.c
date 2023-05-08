@@ -123,9 +123,11 @@ DYNAMIC_API PEP_STATUS init(
 #define _LOG_API(...)    _INTERNAL_LOG_WITH_MACRO_NAME(PEP_LOG_API, __VA_ARGS__)
 #define _LOG_TRACE(...)  _INTERNAL_LOG_WITH_MACRO_NAME(PEP_LOG_TRACE, __VA_ARGS__)
 
-    status = init_databases(_session); /* Every database except log. */
+    /* Initialise the management and system databases, but not the log database
+       (which has been initialised already if needed). */
+    status = pEp_sql_init_any_session(_session);
     if (status != PEP_STATUS_OK)
-        return status;
+        goto pEp_error;
 
     if (in_first) {
         status = pEp_sql_init_first_session_only(_session);
@@ -136,10 +138,6 @@ DYNAMIC_API PEP_STATUS init(
         // calculate more than once.
         _init_globals();
     }
-
-    status = pEp_sql_init_any_session(_session);
-    if (status != PEP_STATUS_OK)
-        goto pEp_error;
 
     status = pEp_prepare_sql_stmts(_session);
     if (status != PEP_STATUS_OK)

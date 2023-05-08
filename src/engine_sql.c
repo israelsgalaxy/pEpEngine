@@ -585,66 +585,6 @@ static int user_version(void *_version, int count, char **text, char **name)
     return 0;
 }
 
-PEP_STATUS init_databases(PEP_SESSION session) {
-    PEP_REQUIRE_ORELSE_RETURN(LOCAL_DB, PEP_INIT_CANNOT_OPEN_DB);
-
-//#ifdef _PEP_SQLITE_DEBUG
-    sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, session);
-//#endif
-
-    int int_result = sqlite3_open_v2(
-            LOCAL_DB,
-            &session->db,
-            SQLITE_OPEN_READWRITE
-            | SQLITE_OPEN_CREATE
-            | SQLITE_OPEN_FULLMUTEX
-            | SQLITE_OPEN_PRIVATECACHE,
-            NULL
-    );
-
-    if (int_result != SQLITE_OK)
-        return PEP_INIT_CANNOT_OPEN_DB;
-
-    do {
-        int_result = sqlite3_exec(session->db,
-                                  "PRAGMA locking_mode=NORMAL;\n"
-                                  "PRAGMA journal_mode=WAL;\n"
-                                  "VACUUM\n",
-                                  NULL, NULL, NULL);
-        if (int_result != SQLITE_OK)
-            LOG_NONOK("failed executing early SQLite statements: %i %s",
-                      int_result, sqlite3_errmsg(session->db));
-    } while (int_result != SQLITE_OK);
-
-    /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
-       here, setting the busy wait time to 5 seconds.  I removed it.  We are now
-       handling SQLITE_BUSY through the functionality in sql_reliabiliy.h and
-       sql_reliabiliy.c . */
-    sqlite3_busy_timeout(session->db, 0);
-
-//#ifdef _PEP_SQLITE_DEBUG
-    sqlite3_trace_v2(session->db, 
-        SQLITE_TRACE_STMT | SQLITE_TRACE_ROW | SQLITE_TRACE_CLOSE,
-        sql_trace_callback,
-        session);
-//#endif
-
-    PEP_WEAK_ASSERT_ORELSE_RETURN(SYSTEM_DB, PEP_INIT_CANNOT_OPEN_SYSTEM_DB);
-
-    int_result = sqlite3_open_v2(
-            SYSTEM_DB, &session->system_db,
-            SQLITE_OPEN_READONLY
-            | SQLITE_OPEN_FULLMUTEX
-            | SQLITE_OPEN_SHAREDCACHE,
-            NULL
-    );
-
-    if (int_result != SQLITE_OK)
-        return PEP_INIT_CANNOT_OPEN_SYSTEM_DB;
-
-    return PEP_STATUS_OK;    
-}
-
 static PEP_STATUS _create_initial_tables(PEP_SESSION session) {
     int int_result = sqlite3_exec(
             session->db,
@@ -1590,11 +1530,35 @@ static PEP_STATUS _check_and_execute_upgrades(PEP_SESSION session, int version) 
     return PEP_STATUS_OK;
 }
 
+static int pEp_open_local_database(PEP_SESSION session,
+                                   int other_flags) {
+    PEP_ASSERT(! EMPTYSTR(LOCAL_DB));
+
+    return sqlite3_open_v2(LOCAL_DB,
+                           & session->db,
+                           SQLITE_OPEN_READWRITE
+                           | SQLITE_OPEN_FULLMUTEX
+                           | SQLITE_OPEN_PRIVATECACHE
+                           | other_flags,
+                           NULL);
+}
+
 PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
     PEP_REQUIRE(session);
+    PEP_STATUS status = create_tables(session);
+
+#define FAIL(the_status)        \
+    do {                        \
+        status = (the_status);  \
+        goto end;               \
+    } while (false)
+
+    int int_result = SQLITE_OK;
+    int_result = pEp_open_local_database(session, SQLITE_OPEN_CREATE);
+    if (int_result != SQLITE_OK)
+        FAIL(PEP_INIT_CANNOT_OPEN_DB);
 
     bool very_first __attribute__((__unused__)) = false;
-    PEP_STATUS status = create_tables(session);
     if (status != PEP_STATUS_OK)
         return status;
 
@@ -1605,7 +1569,7 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
 
     void (*xFunc_lower)(sqlite3_context *, int, sqlite3_value **) = &_sql_lower;
 
-    int int_result = sqlite3_create_function_v2(
+    int_result = sqlite3_create_function_v2(
             session->db,
             "lower",
             1,
@@ -1658,21 +1622,60 @@ PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
         PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     }
-    return PEP_STATUS_OK;
+ end:
+    LOG_NONOK_STATUS_CRITICAL;
+    return status;
+#undef FAIL
 }
 
 PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
     PEP_REQUIRE(session);
     PEP_STATUS status = PEP_STATUS_OK;
 
+#define FAIL(the_status)        \
+    do {                        \
+        status = (the_status);  \
+        goto end;               \
+    } while (false)
+
     int int_result = SQLITE_OK;
+    int_result = pEp_open_local_database(session, 0);
+    if (int_result != SQLITE_OK)
+        FAIL(PEP_INIT_CANNOT_OPEN_DB);
+
+    int_result = sqlite3_open_v2(
+            SYSTEM_DB, &session->system_db,
+            SQLITE_OPEN_READONLY
+            | SQLITE_OPEN_FULLMUTEX
+            | SQLITE_OPEN_SHAREDCACHE,
+            NULL
+    );
+    if (int_result != SQLITE_OK)
+        FAIL(PEP_INIT_CANNOT_OPEN_SYSTEM_DB);
+
     int_result = sqlite3_exec(session->db,
                               "PRAGMA locking_mode=NORMAL;\n"
                               "PRAGMA journal_mode=WAL;\n"
                               "PRAGMA foreign_key=ON;\n",
                               NULL, NULL, NULL);
     PEP_WEAK_ASSERT_ORELSE(int_result == SQLITE_OK,
-                           { status = PEP_UNKNOWN_DB_ERROR; goto end; } );
+                           FAIL(PEP_UNKNOWN_DB_ERROR));
+
+    /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
+       here, setting the busy wait time to 5 seconds.  I removed it.  We are now
+       handling SQLITE_BUSY through the functionality in sql_reliabiliy.h and
+       sql_reliabiliy.c . */
+    sqlite3_busy_timeout(session->db, 0);
+
+//#ifdef _PEP_SQLITE_DEBUG
+    sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, session);
+//#endif
+    //#ifdef _PEP_SQLITE_DEBUG
+    sqlite3_trace_v2(session->db, 
+        SQLITE_TRACE_STMT | SQLITE_TRACE_ROW | SQLITE_TRACE_CLOSE,
+        sql_trace_callback,
+        session);
+//#endif
 
     do {
         int_result = sqlite3_exec(session->db,
@@ -1686,6 +1689,7 @@ PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
 end:
     LOG_NONOK_STATUS_CRITICAL;
     return status;
+#undef FAIL
 }
 
 
