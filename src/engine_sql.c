@@ -63,22 +63,27 @@ static int sql_trace_callback (unsigned trace_constant,
     PEP_SESSION session = (PEP_SESSION) session_as_context_ptr;
     PEP_REQUIRE_ORELSE(session, { return 0; });
     switch (trace_constant) {
-        case SQLITE_TRACE_STMT:
+    case SQLITE_TRACE_STMT: {
             const char* X_str = (const char*) X;
+            const char *text = sqlite3_expanded_sql((sqlite3_stmt*)P);
             if (!EMPTYSTR(X_str) && X_str[0] == '-' && X_str[1] == '-')
-                LOG_TRACE("statement: %s\n", X_str);
-            else
-                LOG_TRACE("statement: %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
+                LOG_TRACE("statement: %s", X_str);
+            else if (text != NULL)
+                LOG_TRACE("statement: %s", text);
             break;
-        case SQLITE_TRACE_ROW:
-            LOG_TRACE("row: %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
-            break;
-        case SQLITE_TRACE_CLOSE:
-            LOG_TRACE("close");
-            break;
-        default:
-            LOG_TRACE("unexpected trace_constant %u", trace_constant);
-            break;
+    }
+    case SQLITE_TRACE_ROW: {
+        const char *text = sqlite3_expanded_sql((sqlite3_stmt*)P);
+        if (text != NULL)
+            LOG_TRACE("row: %s", text);
+        break;
+    }
+    case SQLITE_TRACE_CLOSE:
+        LOG_TRACE("close");
+        break;
+    default:
+        LOG_TRACE("unexpected trace_constant %u", trace_constant);
+        break;
     }
     return 0;
 }
@@ -1665,7 +1670,8 @@ PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
                               "PRAGMA journal_mode=WAL;\n"
                               "PRAGMA foreign_key=ON;\n",
                               NULL, NULL, NULL);
-    PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
+    PEP_WEAK_ASSERT_ORELSE(int_result == SQLITE_OK,
+                           { status = PEP_UNKNOWN_DB_ERROR; goto end; } );
 
     do {
         int_result = sqlite3_exec(session->db,
