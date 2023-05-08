@@ -56,9 +56,9 @@ extern "C" {
 /* Once every this number of consecutive backoffs log one message. */
 #define PEP_BACKOFF_TIMES_BEFORE_LOGGING       1
 
-/* Once every this number of consecutive backoffs force a checkpoint, to avoid
-   starvation. */
-#define PEP_BACKOFF_TIMES_BEFORE_CHECKPOINTING 10
+///* Once every this number of consecutive backoffs force a checkpoint, to avoid
+//   starvation. */
+//#define PEP_BACKOFF_TIMES_BEFORE_CHECKPOINTING 10
 
 
 /* This is the local state of a block using exponential backoff.  The struct is
@@ -211,7 +211,7 @@ PEP_STATUS pEp_backoff_state_finalize(
                 PEP_STATUS _pEp_sql_state                                       \
                     = pEp_back_off(session, & _pEp_sql_backoff_state);          \
                 PEP_ASSERT(_pEp_sql_state == PEP_STATUS_OK);                    \
-                /* ...And now iterate in the inner block again, skipping over   \
+                /* ... And now iterate in the inner block again, skipping over  \
                    the assignment which would make it end. */                   \
                 continue;                                                       \
             }                                                                   \
@@ -228,7 +228,42 @@ PEP_STATUS pEp_backoff_state_finalize(
 local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
         pEp_backoff_state_finalize(session,                                     \
                                    & _pEp_sql_backoff_state);                   \
+        /* Help other threads proceed by committing the latest changes. */      \
+        PEP_SQL_CHECKPOINT;                                                     \
     } while (false) /* End of the outer block. */
+
+
+/* SQLite checkpointing
+ * ***************************************************************** */
+
+/* This functionality is only used internally, in this module. */
+
+/* Perform an explicit checkpoint operation, of one of the kinds supported by
+   SQLite.  This is a helper for PEP_SQL_CHECKPOINT. */
+#define PEP_SQL_CHECKPOINT_ONE_KIND(kind)                                \
+    do {                                                                 \
+        int int_result                                                   \
+            = sqlite3_wal_checkpoint_v2(session->db, NULL, kind,         \
+                                        NULL, NULL);                     \
+        if (int_result != SQLITE_OK)                                     \
+            LOG_NONOK("tried to checkpoint (%s): the result was %i %s",  \
+                      int_result, sqlite3_errmsg(session->db));          \
+    } while (false)
+
+/* Perform explicit checkpointing.  This is intended to prevent starvation by
+   making changes available to other concurrent database connections. */
+#define PEP_SQL_CHECKPOINT                                            \
+    do {                                                              \
+        LOG_TRACE("checkpointing");                                   \
+/*        LOG_NONOK("checkpointing after backing off from %s %i times"  \
+                  "(checkpointing once every %i times)",              \
+                  s->source_location, (int) s->failure_no,            \
+                  (int) PEP_BACKOFF_TIMES_BEFORE_CHECKPOINTING);*/      \
+        PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_PASSIVE);       \
+        PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_FULL);          \
+        PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_RESTART);       \
+        LOG_TRACE("...done checkpointing");                           \
+    } while (false)
 
 
 /* SQLite EXCLUSIVE transactions and spinlocking
