@@ -224,8 +224,6 @@ PEP_STATUS pEp_backoff_state_finalize(
                                                                  end.  */       \
         /* Finalize the state and take backoff data into account for statistics \
            and logging, now that we have stopped looping. */                    \
-/*local_failure_no += _pEp_sql_backoff_state.failure_no; \
-local_wait_time += _pEp_sql_backoff_state.total_time_slept_in_ms;*/ \
         pEp_backoff_state_finalize(session,                                     \
                                    & _pEp_sql_backoff_state);                   \
         /* Help other threads proceed by committing the latest changes. */      \
