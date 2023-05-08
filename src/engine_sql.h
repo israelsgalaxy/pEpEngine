@@ -414,7 +414,7 @@ static const char *sql_is_key_sticky_for_user MAYBE_UNUSED =
         "select sticky from trust "
         "    where user_id = ?1 and pgp_keypair_fpr = upper(replace(?2,' ','')) ; ";
 
-static const char *sql_mark_as_compromised MAYBE_UNUSED =
+static const char *sql_mark_compromised MAYBE_UNUSED =
         "update trust not indexed set comm_type = 15"
         " where pgp_keypair_fpr = upper(replace(?1,' ','')) ;";
 
