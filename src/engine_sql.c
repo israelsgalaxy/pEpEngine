@@ -1668,7 +1668,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
             int_result = sqlite3_exec(session->db,
                                       "PRAGMA optimize;\n"
                                       "VACUUM;\n"
-                                      "PRAGMA wal_checkpoint(DELETE);\n",
+                                      "PRAGMA wal_checkpoint(TRUNCATE);\n",
                                       NULL, NULL, NULL);
             if (int_result != SQLITE_OK)
                 LOG_NONOK("failed executing early SQLite statements: %i %s",
