@@ -62,22 +62,20 @@ int sql_trace_callback (unsigned trace_constant,
                         void* P,
                         void* X) {
     PEP_SESSION session = (PEP_SESSION) session_as_context_ptr;
-    PEP_REQUIRE_ORELSE(session, {return 0;});
+    PEP_REQUIRE_ORELSE(session, { return 0; });
     switch (trace_constant) {
         case SQLITE_TRACE_STMT:
-            fprintf(stderr, "SQL_DEBUG: STMT - ");
             const char* X_str = (const char*) X;
             if (!EMPTYSTR(X_str) && X_str[0] == '-' && X_str[1] == '-')
-                fprintf(stderr, "%s\n", X_str);
+                LOG_TRACE("SQL_DEBUG: STMT - %s\n", X_str);
             else
-                fprintf(stderr, "%s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
+                LOG_TRACE("SQL_DEBUG: STMT - %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
             break;
         case SQLITE_TRACE_ROW:
-            fprintf(stderr, "SQL_DEBUG: ROW - ");
-            fprintf(stderr, "%s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
+            LOG_TRACE("SQL_DEBUG: ROW - %s\n", sqlite3_expanded_sql((sqlite3_stmt*)P));
             break;
         case SQLITE_TRACE_CLOSE:
-            fprintf(stderr, "SQL_DEBUG: CLOSE - ");
+            LOG_TRACE("SQL_DEBUG: CLOSE - ");
             break;
         default:
             break;
