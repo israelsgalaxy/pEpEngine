@@ -61,7 +61,8 @@ static int sql_trace_callback (unsigned trace_constant,
                                void* P,
                                void* X) {
     PEP_SESSION session = (PEP_SESSION) session_as_context_ptr;
-    PEP_REQUIRE_ORELSE(session, { return 0; });
+    /* Avoid PEP_REQUIRE_ORELSE here.  The output would be very distracting,
+       for no benefit. */
     switch (trace_constant) {
     case SQLITE_TRACE_STMT: {
             const char* X_str = (const char*) X;
@@ -588,7 +589,7 @@ PEP_STATUS init_databases(PEP_SESSION session) {
     PEP_REQUIRE_ORELSE_RETURN(LOCAL_DB, PEP_INIT_CANNOT_OPEN_DB);
 
 //#ifdef _PEP_SQLITE_DEBUG
-    sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, NULL);
+    sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, session);
 //#endif
 
     int int_result = sqlite3_open_v2(
