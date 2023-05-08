@@ -45,7 +45,7 @@ extern "C" {
 #define PEP_INITIAL_UPPER_LIMIT_BACKOFF_IN_MS  10
 
 /* The maximum wait in milliseconds.  No wait is ever longer than this value. */
-#define PEP_MAXIMUM_BACKOFF_IN_MS              100
+#define PEP_MAXIMUM_BACKOFF_IN_MS              5000
 
 /* The wait length upper limit increasing ratio: after every wait we make the next
    one potentially longer (up to PEP_MAXIMUM_BACKOFF_IN_MS) by multiplying the
