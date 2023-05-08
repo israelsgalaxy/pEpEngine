@@ -1653,7 +1653,10 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
                                       "PRAGMA integrity_check;\n"
                                       "PRAGMA optimize;\n"
                                       "VACUUM;\n"
-                                      "PRAGMA wal_checkpoint(TRUNCATE);\n",
+                                      "PRAGMA wal_checkpoint(TRUNCATE);\n"
+                                      "PRAGMA journal_mode=WAL;\n"
+                                      "PRAGMA journal_mode=DELETE;\n" "PRAGMA synchronous=extra;\n",
+                                      "PRAGMA wal_autocheckpoint=1;\n"
                                       NULL, NULL, NULL);
             if (int_result != SQLITE_OK)
                 LOG_NONOK("failed executing early first-session SQLite"
@@ -1670,10 +1673,7 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     //do {
         int_result = sqlite3_exec(session->db,
                                   "PRAGMA locking_mode=NORMAL;\n"
-                                  "PRAGMA journal_mode=WAL;\n"
-                                  "PRAGMA journal_mode=DELETE;\n" "PRAGMA synchronous=extra;\n"
                                   "PRAGMA foreign_key=ON;\n"
-                                  "PRAGMA wal_autocheckpoint=1;\n"
                                   "",
                                   NULL, NULL, NULL);
         if (int_result != SQLITE_OK) {
