@@ -248,13 +248,14 @@ DYNAMIC_API void release(PEP_SESSION session)
             pEp_finalize_sql_stmts(session);
             if (session->db) {
                 if (out_last) {
-                    sqlite3_exec(        
-                        session->db,
-                        "PRAGMA optimize;\n",
-                        NULL,
-                        NULL,
-                        NULL
-                    );
+                    int int_result = SQLITE_OK;
+                    PEP_SQL_BEGIN_LOOP(int_result);
+                    int_result = sqlite3_exec(session->db,
+                                              "PRAGMA optimize;\n",
+                                              NULL,
+                                              NULL,
+                                              NULL);
+                    PEP_SQL_END_LOOP();
                 }    
                 sqlite3_close_v2(session->db);
             }
@@ -3979,13 +3980,16 @@ DYNAMIC_API PEP_STATUS reset_pEptest_hack(PEP_SESSION session)
 {
     PEP_REQUIRE(session);
 
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
         session->db,
         "delete from identity where address like '%@pEptest.ch' ;",
         NULL,
         NULL,
         NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_get_all_keys_for_identity,
