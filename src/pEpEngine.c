@@ -132,13 +132,18 @@ DYNAMIC_API PEP_STATUS init(
         return status;
 
     if (in_first) {
-
-        status = pEp_sql_init(_session);
+        status = pEp_sql_init_first_session_only(_session);
+        if (status != PEP_STATUS_OK)
+            goto pEp_error;
 
         // We need to init a few globals for message id that we'd rather not
         // calculate more than once.
         _init_globals();
     }
+
+    status = pEp_sql_init_any_session(_session);
+    if (status != PEP_STATUS_OK)
+        goto pEp_error;
 
     status = pEp_prepare_sql_stmts(_session);
     if (status != PEP_STATUS_OK)

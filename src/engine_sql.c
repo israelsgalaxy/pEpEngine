@@ -1583,7 +1583,7 @@ static PEP_STATUS _check_and_execute_upgrades(PEP_SESSION session, int version) 
     return PEP_STATUS_OK;
 }
 
-PEP_STATUS pEp_sql_init(PEP_SESSION session) {
+PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session) {
     bool very_first __attribute__((__unused__)) = false;
     PEP_STATUS status = create_tables(session);
     if (status != PEP_STATUS_OK)
@@ -1659,6 +1659,25 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session) {
 
     }
     return PEP_STATUS_OK;
+}
+
+PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+    PEP_STATUS status = PEP_STATUS_OK;
+
+    int int_result = SQLITE_OK;
+    do {
+        int_result = sqlite3_exec(session->db,
+                                  "PRAGMA locking_mode=NORMAL;\n"
+                                  "PRAGMA journal_mode=WAL;\n"
+                                  "VACUUM\n",
+                                  NULL, NULL, NULL);
+        if (int_result != SQLITE_OK)
+            LOG_NONOK("failed executing early SQLite statements: %i %s",
+                      int_result, sqlite3_errmsg(session->db));
+    } while (int_result != SQLITE_OK);
+
+    return status;
 }
 
 

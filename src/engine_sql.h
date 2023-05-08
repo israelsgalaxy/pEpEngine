@@ -11,7 +11,8 @@
 #define _DDL_USER_VERSION "19"
 
 PEP_STATUS init_databases(PEP_SESSION session);
-PEP_STATUS pEp_sql_init(PEP_SESSION session);
+PEP_STATUS pEp_sql_init_first_session_only(PEP_SESSION session);
+PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session);
 PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session);
 PEP_STATUS pEp_finalize_sql_stmts(PEP_SESSION session);
 
