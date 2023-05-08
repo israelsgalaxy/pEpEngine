@@ -1650,7 +1650,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
     int_result = sqlite3_exec(session->db,
                               "PRAGMA locking_mode=NORMAL;\n"
                               "PRAGMA journal_mode=WAL;\n"
-                              "PRAGMA foreign_key=ON;\n",
+                              "PRAGMA foreign_key=ON;"
+                              "foobarquux\n",
                               NULL, NULL, NULL);
     if(int_result != SQLITE_OK)
         FAIL(PEP_UNKNOWN_DB_ERROR);
