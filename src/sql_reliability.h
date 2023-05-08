@@ -244,7 +244,7 @@ PEP_SQL_CHECKPOINT; /* FIXME: almost certainly excessive. */\
         int _checkpoint_result                                           \
             = sqlite3_wal_checkpoint_v2(session->db, NULL, kind,         \
                                         NULL, NULL);                     \
-        if (_checkpoint_result != SQLITE_OK)                             \
+        /*if (_checkpoint_result != SQLITE_OK)*/                             \
             LOG_NONOK("tried to checkpoint (%s): the result was %i %s",  \
                       # kind, _checkpoint_result,                        \
                       sqlite3_errmsg(session->db));                      \
