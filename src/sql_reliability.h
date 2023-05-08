@@ -238,17 +238,14 @@ PEP_STATUS pEp_backoff_state_finalize(
 
 /* Perform an explicit checkpoint operation, of one of the kinds supported by
    SQLite.  This is a helper for PEP_SQL_CHECKPOINT. */
-#define PEP_SQL_CHECKPOINT_ONE_KIND(kind)                                \
-    do {                                                                 \
-       int int_result;                                                   \
-       do {                                                              \
-           int_result                                                    \
-               = sqlite3_wal_checkpoint_v2(session->db, NULL, kind,      \
-                                           NULL, NULL);                  \
-           /*if (int_result != SQLITE_OK)*/                                  \
-               LOG_NONOK("tried to checkpoint (%s): the result was %i %s",      \
-                         # kind, int_result, sqlite3_errmsg(session->db));      \
-       } while (int_result != SQLITE_OK);                                       \
+#define PEP_SQL_CHECKPOINT_ONE_KIND(kind)                              \
+    do {                                                               \
+        /*int _checkpoint_result = */                                  \
+        sqlite3_wal_checkpoint_v2(session->db, NULL, kind,             \
+                                  NULL, NULL);                         \
+        /*LOG_NONOK("tried to checkpoint (%s): the result was %i %s",  \
+          # kind, _checkpoint_result,                                  \
+          sqlite3_errmsg(session->db)); */                             \
     } while (false)
 
 /* Perform explicit checkpointing.  This is intended to prevent starvation by
