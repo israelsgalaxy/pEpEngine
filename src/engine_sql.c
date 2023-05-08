@@ -1533,7 +1533,7 @@ static PEP_STATUS _check_and_execute_upgrades(PEP_SESSION session, int version) 
 static int pEp_open_local_database(PEP_SESSION session,
                                    int other_flags) {
     PEP_ASSERT(! EMPTYSTR(LOCAL_DB));
-
+    PEP_ASSERT(session->db == NULL);
     return sqlite3_open_v2(LOCAL_DB,
                            & session->db,
                            SQLITE_OPEN_READWRITE
@@ -1644,6 +1644,7 @@ PEP_STATUS pEp_sql_init_any_session(PEP_SESSION session) {
     if (int_result != SQLITE_OK)
         FAIL(PEP_INIT_CANNOT_OPEN_DB);
 
+    PEP_ASSERT(session->system_db == NULL);
     int_result = sqlite3_open_v2(SYSTEM_DB, &session->system_db,
                                  SQLITE_OPEN_READONLY
                                  | SQLITE_OPEN_FULLMUTEX
