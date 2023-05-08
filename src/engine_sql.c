@@ -606,9 +606,8 @@ PEP_STATUS init_databases(PEP_SESSION session) {
                                   "VACUUM\n",
                                   NULL, NULL, NULL);
         if (int_result != SQLITE_OK)
-            fprintf(stderr, "failed executing SQLite statements at"
-                    " initialisation: %i %s\n", int_result,
-                    sqlite3_errmsg(session->db));
+            LOG_NONOK("failed executing early SQLite statements: %i %s",
+                      int_result, sqlite3_errmsg(session->db));
     } while (int_result != SQLITE_OK);
 
     /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
