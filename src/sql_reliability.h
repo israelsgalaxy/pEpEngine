@@ -37,7 +37,7 @@ extern "C" {
 
 /* The minimum wait in milliseconds; no wait is ever shorter than this value.
    This is also the lower bound of the random wait time, and never changes. */
-#define PEP_MINIMUM_BACKOFF_IN_MS              10
+#define PEP_MINIMUM_BACKOFF_IN_MS              0
 
 /* The initial wait upper limit in milliseconds.  This upper limit will start at
    this value and then grow after each backoff, up to
@@ -45,13 +45,13 @@ extern "C" {
 #define PEP_INITIAL_UPPER_LIMIT_BACKOFF_IN_MS  10
 
 /* The maximum wait in milliseconds.  No wait is ever longer than this value. */
-#define PEP_MAXIMUM_BACKOFF_IN_MS              1000
+#define PEP_MAXIMUM_BACKOFF_IN_MS              100
 
 /* The wait length upper limit increasing ratio: after every wait we make the next
    one potentially longer (up to PEP_MAXIMUM_BACKOFF_IN_MS) by multiplying the
    current upper limit by this value.  The minimum value remains at
    PEP_MINIMUM_BACKOFF_IN_MS .*/
-#define PEP_BACKOFF_UPPER_LIMIT_GROWTH_FACTOR  (1 + .2)  /* 20 % increase */
+#define PEP_BACKOFF_UPPER_LIMIT_GROWTH_FACTOR  (1 + .1)  /* 10 % increase */
 
 /* Once every this number of consecutive backoffs log one message. */
 #define PEP_BACKOFF_TIMES_BEFORE_LOGGING       1
