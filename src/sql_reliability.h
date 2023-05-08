@@ -456,14 +456,16 @@ int pEp_sqlite3_prepare_v3_nonbusy_nonlocked(PEP_SESSION session,
 #define sql_reset_and_clear_bindings(statement_p)           \
     do {                                                    \
         sqlite3_stmt *_sql_racb_statement = (statement_p);  \
+        FILE *_sql_racb_f = stdout;                         \
         /*PEP_ASSERT(_sql_racb_statement != NULL);*/        \
-        assert(_sql_racb_statement != NULL);                \
+        /*assert(_sql_racb_statement != NULL);*/                \
         if (_sql_racb_statement == NULL) {                  \
-            fprintf(stderr, "%s:%i %s"                      \
+            fprintf(_sql_racb_f, "%s:%i %s"                 \
                     " sql_reset_and_clear_bindings: wrong:" \
                     " %s is NULL\n",                        \
                     __FILE__, __LINE__, __func__,           \
                     # statement_p);                         \
+            fflush(_sql_racb_f);                            \
             abort();                                        \
         }                                                   \
         sqlite3_reset(_sql_racb_statement);                 \
