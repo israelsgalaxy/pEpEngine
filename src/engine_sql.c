@@ -1738,6 +1738,8 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
     PREPARE(system_db, trustword);
     int_result = sqlite3_prepare_v2(session->system_db, sql_trustword,
                                     (int)strlen(sql_trustword), &session->trustword, NULL);
+    PREPARE(system_db, languagelist);
+    PREPARE(system_db, i18n_token);
 
     /* Everything else: management db. */
     PREPARE(db, begin_exclusive_transaction);
@@ -1797,8 +1799,6 @@ PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session) {
     PREPARE(db, update_key_sticky_bit_for_user);
     PREPARE(db, is_key_sticky_for_user);
     PREPARE(db, mark_compromised);
-    PREPARE(db, languagelist);
-    PREPARE(db, i18n_token);
 
     // Own keys
     PREPARE(db, own_key_is_listed);
