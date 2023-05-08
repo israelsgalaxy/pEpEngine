@@ -599,17 +599,17 @@ PEP_STATUS init_databases(PEP_SESSION session) {
     if (int_result != SQLITE_OK)
         return PEP_INIT_CANNOT_OPEN_DB;
 
-    int_result = sqlite3_exec(
-            session->db,
-            "PRAGMA locking_mode=NORMAL;\n"
-            "PRAGMA journal_mode=WAL;\n"
-            "VACUUM\n",
-            NULL,
-            NULL,
-            NULL
-    );
-    if (int_result != SQLITE_OK)
-        return PEP_INIT_CANNOT_OPEN_DB;
+    do {
+        int_result = sqlite3_exec(session->db,
+                                  "PRAGMA locking_mode=NORMAL;\n"
+                                  "PRAGMA journal_mode=WAL;\n"
+                                  "VACUUM\n",
+                                  NULL, NULL, NULL);
+        if (int_result != SQLITE_OK)
+            fprintf(stderr, "failed executing SQLite statements at"
+                    " initialisation: %i %s\n", int_result,
+                    sqlite3_errmsg(session->db));
+    } while (int_result != SQLITE_OK);
 
     /* positron: before 2023-05-04 there was a call to sqlite3_busy_timeout
        here, setting the busy wait time to 5 seconds.  I removed it.  We are now
