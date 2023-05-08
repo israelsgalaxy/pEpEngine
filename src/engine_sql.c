@@ -1655,8 +1655,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session,
                                       "VACUUM;\n"
                                       "PRAGMA wal_checkpoint(TRUNCATE);\n"
                                       "PRAGMA journal_mode=WAL;\n"
-                                      "PRAGMA journal_mode=DELETE;\n" "PRAGMA synchronous=extra;\n",
-                                      "PRAGMA wal_autocheckpoint=1;\n"
+                                      "PRAGMA journal_mode=DELETE;\n" "PRAGMA synchronous=extra;\n"
+                                      "PRAGMA wal_autocheckpoint=1;\n",
                                       NULL, NULL, NULL);
             if (int_result != SQLITE_OK)
                 LOG_NONOK("failed executing early first-session SQLite"
