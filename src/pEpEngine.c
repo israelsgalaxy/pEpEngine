@@ -19,10 +19,6 @@
 #include <time.h>
 #include <stdlib.h>
 
-#ifdef _PEP_SQLITE_DEBUG
-#include <sqlite3.h>
-#endif
-
 
 void
 sql_reset_and_clear_bindings(sqlite3_stmt *s)

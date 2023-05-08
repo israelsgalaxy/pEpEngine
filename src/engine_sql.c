@@ -581,9 +581,9 @@ static int user_version(void *_version, int count, char **text, char **name)
 PEP_STATUS init_databases(PEP_SESSION session) {
     PEP_REQUIRE_ORELSE_RETURN(LOCAL_DB, PEP_INIT_CANNOT_OPEN_DB);
 
-#ifdef _PEP_SQLITE_DEBUG
+//#ifdef _PEP_SQLITE_DEBUG
     sqlite3_config(SQLITE_CONFIG_LOG, errorLogCallback, NULL);
-#endif
+//#endif
 
     int int_result = sqlite3_open_v2(
             LOCAL_DB,

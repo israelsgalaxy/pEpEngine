@@ -2287,7 +2287,6 @@ INCLUDE_FILE_PATTERNS  =
 
 PREDEFINED             = ENIGMAIL_MAY_USE_THIS \
                          USE_SEQUOIA \
-                         _PEP_SQLITE_DEBUG \
 			 DYNAMIC_API= \
                          MAYBE_UNUSED=\
 			 __attribute__((__unused__))=
