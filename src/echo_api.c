@@ -235,6 +235,8 @@ static PEP_STATUS make_sure_identity_exists(PEP_SESSION session,
                                             const pEp_identity *identity)
 {
     PEP_REQUIRE(session && identity);
+    LOG_WARNING("on %s <%s>: this function is conceptually wrong, and I am disabling it.  It now does nothing and assumes that the identity indeed exists.", ASNONNULLSTR(identity->username), ASNONNULLSTR(identity->address));
+    return PEP_STATUS_OK;
 
     PEP_STATUS status = PEP_STATUS_OK;
     pEp_identity *identity_copy = NULL;
