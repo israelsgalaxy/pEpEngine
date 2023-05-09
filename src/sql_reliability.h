@@ -26,23 +26,21 @@ extern "C" {
    Backing off before trying again makes such loops less CPU-intensive, and
    should lead to faster eventual progress.
 
-   The constant definitions below could be tuned in application-, platform- and
-   even machine-specific ways.  Here the intent is simply sustaining a moderate
-   amount of threads, in the order of a few hundreds, all concurrently writing
-   to the same database, with a write bandwidth not too far from the sequential
-   case.
-   These values were tentatively set by positron in early 2023 by testing on his
-   "moore" laptop (4-core 8-thread Intel i7 3.2GHz, 16GB RAM, SSD drive),
-   GNU/Linux. */
+   The constant definitions below could be in theory tuned in application-,
+   platform- and even machine-specific ways.  Here the intent is simply
+   sustaining a moderate amount of threads, in the order of a few tens, all
+   concurrently writing to the same database.
+   The pEp Engine appears to be unusual in database applications for its high
+   number of write operations; the reason might be update_identity. */
 
 /* The minimum wait in milliseconds; no wait is ever shorter than this value.
    This is also the lower bound of the random wait time, and never changes. */
-#define PEP_MINIMUM_BACKOFF_IN_MS              10
+#define PEP_MINIMUM_BACKOFF_IN_MS              100
 
 /* The initial wait upper limit in milliseconds.  This upper limit will start at
    this value and then grow after each backoff, up to
    PEP_MAXIMUM_BACKOFF_IN_MS. */
-#define PEP_INITIAL_UPPER_LIMIT_BACKOFF_IN_MS  10
+#define PEP_INITIAL_UPPER_LIMIT_BACKOFF_IN_MS  250
 
 /* The maximum wait in milliseconds.  No wait is ever longer than this value. */
 #define PEP_MAXIMUM_BACKOFF_IN_MS              1000
@@ -51,15 +49,16 @@ extern "C" {
    one potentially longer (up to PEP_MAXIMUM_BACKOFF_IN_MS) by multiplying the
    current upper limit by this value.  The minimum value remains at
    PEP_MINIMUM_BACKOFF_IN_MS .*/
-#define PEP_BACKOFF_UPPER_LIMIT_GROWTH_FACTOR  (1 + .2)  /* 20 % increase */
+#define PEP_BACKOFF_UPPER_LIMIT_GROWTH_FACTOR  (1 + .5)  /* 50 % increase */
 
 /* Once every this number of consecutive backoffs log one message. */
 #define PEP_BACKOFF_TIMES_BEFORE_LOGGING       1
 
+#if 0
 /* Once every this number of consecutive backoffs force a checkpoint, to avoid
    starvation. */
 #define PEP_BACKOFF_TIMES_BEFORE_CHECKPOINTING 10
-
+#endif
 
 /* This is the local state of a block using exponential backoff.  The struct is
    used internally and its fields should be treated as opaque. */
@@ -204,14 +203,22 @@ PEP_STATUS pEp_backoff_state_finalize(
             /* ... still inside the inner loop started at PEP_SQL_BEGIN, now    \
                after the user C code to be tried multiple times. */             \
             PEP_ASSERT (* _pEp_sql_sqlite_status_address != SQLITE_LOCKED);     \
-            if (* _pEp_sql_sqlite_status_address == SQLITE_BUSY) {              \
+            /* Warn about statuses which are amost certainly unexpected, but    \
+               not about SQL_BUSY which is handled below. */                    \
+            if (* _pEp_sql_sqlite_status_address != SQLITE_OK                   \
+                && * _pEp_sql_sqlite_status_address != SQLITE_DONE              \
+                && * _pEp_sql_sqlite_status_address != SQLITE_ROW               \
+                && * _pEp_sql_sqlite_status_address != SQLITE_BUSY)             \
+                LOG_NONOK("PEP_SQL_{BEGIN,END}_LOOP: got %s",                   \
+                          pEp_sql_status_text(session));                        \
+           if (* _pEp_sql_sqlite_status_address == SQLITE_BUSY) {               \
                 /* Only for defensiveness's sake: */                            \
                 * _pEp_sql_sqlite_status_address = SQLITE_OK;                   \
                 /* This attempt failed.  Back off... */                         \
                 PEP_STATUS _pEp_sql_state                                       \
                     = pEp_back_off(session, & _pEp_sql_backoff_state);          \
                 PEP_ASSERT(_pEp_sql_state == PEP_STATUS_OK);                    \
-                /* ...And now iterate in the inner block again, skipping over   \
+                /* ... And now iterate in the inner block again, skipping over  \
                    the assignment which would make it end. */                   \
                 continue;                                                       \
             }                                                                   \
@@ -227,6 +234,31 @@ PEP_STATUS pEp_backoff_state_finalize(
         pEp_backoff_state_finalize(session,                                     \
                                    & _pEp_sql_backoff_state);                   \
     } while (false) /* End of the outer block. */
+
+
+/* SQLite checkpointing
+ * ***************************************************************** */
+
+/* This functionality is only meant to be used internally, in this module, and
+   even then mostly as an experiment.  The idea is trying to prevent starvation
+   by making changes available to other concurrent database connections. */
+
+/* Perform an explicit checkpoint operation, of one of the kinds supported by
+   SQLite.  This is a helper for PEP_SQL_CHECKPOINT. */
+#define PEP_SQL_CHECKPOINT_ONE_KIND(kind)                                \
+    do {                                                                 \
+        sqlite3_wal_checkpoint_v2(session->db, NULL, kind, NULL, NULL);  \
+        LOG_NONOK("tried to checkpoint (%s): the result was %s",         \
+                  # kind, pEp_sql_status_text(session));                 \
+    } while (false)
+
+/* Perform explicit checkpointing operation, of the appropriate kind or
+   kinds. */
+#define PEP_SQL_CHECKPOINT                                            \
+    do {                                                              \
+        PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_PASSIVE);       \
+        PEP_SQL_CHECKPOINT_ONE_KIND(SQLITE_CHECKPOINT_RESTART);       \
+    } while (false)
 
 
 /* SQLite EXCLUSIVE transactions and spinlocking
@@ -287,19 +319,18 @@ PEP_STATUS pEp_backoff_state_finalize(
             _pEp_sql_sqlite_begin_status                                        \
                 = sqlite3_step(session->begin_exclusive_transaction);           \
             if (_pEp_sql_sqlite_begin_status != SQLITE_DONE)                    \
-                LOG_NONOK("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION: loop with "     \
-                          "sqlite status %i (attempt %i)",                      \
-                          _pEp_sql_sqlite_begin_status,                         \
-                          _pEp_sql_backoff_state.failure_no + 1);               \
+                LOG_WARNING("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION: loop with "   \
+                            "sqlite status %s (attempt %i)",                    \
+                            pEp_sql_status_text(session),                       \
+                            _pEp_sql_backoff_state.failure_no + 1);             \
         PEP_SQL_END_LOOP();                                                     \
         /* After this point we must have opened the transaction with success.   \
            Make sure something unexpected has not happened. */                  \
         PEP_ASSERT(_pEp_sql_sqlite_begin_status != SQLITE_BUSY);                \
         PEP_ASSERT(_pEp_sql_sqlite_begin_status != SQLITE_LOCKED);              \
         if (_pEp_sql_sqlite_begin_status != SQLITE_DONE)                        \
-            LOG_ERROR("UNEXPECTED error on BEGIN EXCLUSIVE TRANSACTION: %i %s", \
-                      _pEp_sql_sqlite_begin_status,                             \
-                      sqlite3_errmsg(session->db));                             \
+            LOG_ERROR("UNEXPECTED error on BEGIN EXCLUSIVE TRANSACTION: %s",    \
+                      pEp_sql_status_text(session));                            \
         PEP_ASSERT(_pEp_sql_sqlite_begin_status == SQLITE_DONE);                \
         sqlite3_reset(session->begin_exclusive_transaction);                    \
         /* We are now in a transaction.  This will change the behaviour of      \
@@ -352,14 +383,14 @@ PEP_STATUS pEp_backoff_state_finalize(
             _pEp_sql_sqlite_end_status = sqlite3_step(_pEp_statement);          \
             PEP_ASSERT(_pEp_sql_sqlite_end_status != SQLITE_LOCKED);            \
             if (_pEp_sql_sqlite_end_status == SQLITE_BUSY)                      \
-                LOG_NONOK("PEP_SQL_%s_TRANSACTION: loop with sqlite status %i"  \
-                          " (attempt %i)",                                      \
-                          _pEp_action_name, _pEp_sql_sqlite_end_status,         \
-                          _pEp_sql_backoff_state.failure_no  + 1);              \
+                LOG_WARNING("PEP_SQL_%s_TRANSACTION: loop with sqlite status %i"\
+                            " (attempt %i)",                                    \
+                            _pEp_action_name, _pEp_sql_sqlite_end_status,       \
+                            _pEp_sql_backoff_state.failure_no  + 1);            \
         PEP_SQL_END_LOOP();                                                     \
         if (_pEp_sql_sqlite_end_status != SQLITE_DONE)                          \
-            LOG_ERROR("UNEXPECTED error on %s: %i %s", _pEp_action_name,        \
-                      _pEp_sql_sqlite_end_status, sqlite3_errmsg(session->db)); \
+            LOG_ERROR("UNEXPECTED error on %s: %s", _pEp_action_name,           \
+                      pEp_sql_status_text(session));                            \
         PEP_ASSERT(_pEp_sql_sqlite_end_status == SQLITE_DONE);                  \
         LOG_TRACE("PEP_SQL_%s_TRANSACTION (innermost, success)",                \
                   _pEp_action_name);                                            \
@@ -420,8 +451,10 @@ int pEp_sqlite3_prepare_v3_nonbusy_nonlocked(PEP_SESSION session,
 /* Debugging
  * ***************************************************************** */
 
-/* This should be a function and not a macro; but this definition is useful for
-   me to catch parameters as expressions, and the exact call sites. */
+/* In production sql_reset_and_clear_bindings should be defined as a function
+   and not a macro; but this alternative definition of it is useful for the
+   Engine developers to catch parameters as expressions, and the exact call
+   sites.  Not meant for Engine users. */
 #define sql_reset_and_clear_bindings(statement_p)           \
     do {                                                    \
         sqlite3_stmt *_sql_racb_statement = (statement_p);  \

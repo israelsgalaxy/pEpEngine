@@ -7,6 +7,7 @@
 #include "echo_api.h"
 
 #include "pEp_internal.h"
+#include "engine_sql.h"
 #include "baseprotocol.h"
 #include "distribution_codec.h"
 #include "sync_api.h" // for notifyHandshake, currently defined in this header
@@ -66,9 +67,8 @@ static const char *echo_set_timestamp_text
                so I can afford a debug print when        \
                something unexpected happens. */          \
             if (sql_status == SQLITE_ERROR)              \
-                LOG_ERROR("SQL ERROR %i: %s",            \
-                          sql_status,                    \
-                          sqlite3_errmsg(session->db));  \
+                LOG_ERROR("SQL ERROR %s",                \
+                          pEp_sql_status_text(session)); \
             goto end;                                    \
         }                                                \
     } while (false)
@@ -165,12 +165,17 @@ PEP_STATUS echo_initialize(PEP_SESSION session)
        *before* prepraring statements using the new columns that are created by
        this upgrade. */
     PEP_STATUS status = PEP_STATUS_OK;
-    status = upgrade_add_echo_challange_field(session);
-    if (status != PEP_STATUS_OK)
-        goto end;
-    status = upgrade_add_echo_last_echo_timestamp_field(session);
-    if (status != PEP_STATUS_OK)
-        goto end;
+    if (session->first_session_at_init_time) {
+        LOG_NONOK("do not worry if there are two SQLITE_ERROR statuses in the"
+                  " upgrading function calls here: ALTER TABLE ADD COLUMN fails"
+                  " when the database format is alredy the most recent one");
+        status = upgrade_add_echo_challange_field(session);
+        if (status != PEP_STATUS_OK)
+            goto end;
+        status = upgrade_add_echo_last_echo_timestamp_field(session);
+        if (status != PEP_STATUS_OK)
+            goto end;
+    }
 
     /* Prepare SQL statements, so that we only do it once and for all.  This
        will be important in the future for embedded platforms with limited
@@ -323,7 +328,13 @@ static PEP_STATUS echo_get_below_rate_limit(PEP_SESSION session,
         = pEp_sqlite3_step_nonbusy(session,
                                    session->echo_get_echo_below_rate_limit);
     ON_SQL_ERROR_SET_STATUS_AND_GOTO;
-    LOG_TRACE("speaking about %s <%s>: sql_status is %i %s", ASNONNULLSTR(identity->username), ASNONNULLSTR(identity->address), sql_status, sqlite3_errmsg(session->db));
+
+    // I have seen a crash here I cannot reproduce any more: to be investigated.
+    LOG_TRACE("* speaking about %s", ASNONNULLSTR(identity->username));
+    LOG_TRACE("  speaking about %s <%s>", ASNONNULLSTR(identity->username), ASNONNULLSTR(identity->address));
+    LOG_TRACE("  speaking about sql_status is %i", sql_status);
+    LOG_TRACE("  speaking about sql_status is %i (%s)", sql_status, sqlite3_errmsg(session->db));
+    LOG_TRACE("  speaking about %s <%s>: sql_status is %i (%s)", ASNONNULLSTR(identity->username), ASNONNULLSTR(identity->address), sql_status, sqlite3_errmsg(session->db));
     PEP_ASSERT(   (/* one-row result */
                    sql_status == SQLITE_ROW)
                || (/* no-row result: identity unknown: this should not happen

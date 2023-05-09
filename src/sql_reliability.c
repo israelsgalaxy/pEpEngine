@@ -15,6 +15,7 @@
 #include "sql_reliability.h"
 
 #include "pEp_internal.h"
+#include "engine_sql.h"
 
 #include "pEpEngine.h"
 
@@ -45,9 +46,9 @@ PEP_STATUS pEp_backoff_state_finalize(PEP_SESSION session,
     /* I might want to actually add some statistics in the session, in the
        future. */
     if (s->failure_no > 0)
-        LOG_NONOK("SQLite at %s: success after %i failures, total backoff %li ms",
-                  s->source_location,
-                  (int) s->failure_no, (long) s->total_time_slept_in_ms);
+        LOG_WARNING("SQLite at %s: success after %i failures, total backoff %li ms",
+                    s->source_location,
+                    (int) s->failure_no, (long) s->total_time_slept_in_ms);
     return PEP_STATUS_OK;
 }
 
@@ -67,32 +68,10 @@ static void pEp_backoff_bump(PEP_SESSION session,
     s->failure_no ++;
     s->total_time_slept_in_ms += sleep_time_ms;
 
-    /* This is a quite desperate solution to try and avoid starvation.
-       Currently not used. */
-#define CHECKPOINT(kind)                                            \
-    do {                                                            \
-        LOG_NONOK("trying to checkpoint (%s)...", #kind);           \
-        int int_result                                              \
-            = sqlite3_wal_checkpoint_v2(session->db, NULL, kind,    \
-                                        NULL, NULL);                \
-        LOG_NONOK("...the result of checkpointing (%s) was %i %s",  \
-                  #kind, int_result, sqlite3_errmsg(session->db));  \
-    } while (false)
-
-#define CHECKPOINT_ALL                                                    \
-        do {                                                              \
-            LOG_NONOK("checkpointing after backing off from %s %i times"  \
-                      "(checkpointing once every %i times)",              \
-                      s->source_location, (int) s->failure_no,            \
-                      (int) PEP_BACKOFF_TIMES_BEFORE_CHECKPOINTING);      \
-            CHECKPOINT(SQLITE_CHECKPOINT_PASSIVE);                        \
-            CHECKPOINT(SQLITE_CHECKPOINT_FULL);                           \
-            CHECKPOINT(SQLITE_CHECKPOINT_RESTART);                        \
-            LOG_NONOK("...done checkpointing");                           \
-        } while (false)
-
+#if 0
     if ((s->failure_no % PEP_BACKOFF_TIMES_BEFORE_CHECKPOINTING) == 0)
-        CHECKPOINT_ALL;
+        PEP_SQL_CHECKPOINT;
+#endif
     if ((s->failure_no % PEP_BACKOFF_TIMES_BEFORE_LOGGING) == 0)
         LOG_NONOK("backing off from %s (%i times already; logging once"
                   " every %i times)",
@@ -129,7 +108,8 @@ PEP_STATUS pEp_back_off(PEP_SESSION session,
 
     /* Very easy: sleep, and bump. */
     long sleep_time_in_ms = pEp_backoff_compute_sleep_time(session, s);
-    pEp_sleep_ms(sleep_time_in_ms);
+    if (sleep_time_in_ms != 0)
+        pEp_sleep_ms(sleep_time_in_ms);
     pEp_backoff_bump(session, s, sleep_time_in_ms);
 
     return PEP_STATUS_OK;
@@ -143,8 +123,8 @@ int pEp_sqlite3_step_nonbusy(PEP_SESSION session,
                              sqlite3_stmt *prepared_statement)
 {
     PEP_REQUIRE_ORELSE_RETURN(session && prepared_statement,
-                              /* Something generic: this will not happen anyway
-                                 except for internal bugs */ SQLITE_ERROR);
+                              /* Something generic is acceptable: this will only
+                                 happen because of Engine bugs */ SQLITE_ERROR);
     int sqlite_status;
 
     bool transaction_in_progress_at_entry
@@ -154,8 +134,9 @@ int pEp_sqlite3_step_nonbusy(PEP_SESSION session,
     sqlite_status = sqlite3_step(prepared_statement);
     if (sqlite_status != SQLITE_OK && sqlite_status != SQLITE_ROW
         && sqlite_status != SQLITE_DONE)
-        LOG_TRACE("sqlite_status is %i (%s)", sqlite_status,
-                  sqlite3_errmsg(session->db));
+        LOG_NONOK("sqlite_status is %s from executing %s",
+                  pEp_sql_status_text(session),
+                  sqlite3_expanded_sql(prepared_statement));
     PEP_ASSERT(sqlite_status != SQLITE_LOCKED); /* LOCKED should never happen. */
     if (! transaction_in_progress_at_entry) {
         PEP_ASSERT(sqlite_status != SQLITE_BUSY); /* BUSY should not happen in an

@@ -560,6 +560,16 @@ struct _pEpSession {
        sql_reliability.h . */
     int transaction_in_progress_no;
 
+    // Session-local internal data
+    /* True iff this session is the first one on which init was called.  This is
+       useful to avoid performing some redundant initialisation (in particular
+       on the management database) on sessions different from the first. */
+    bool first_session_at_init_time;
+
+    /* A malloc-allocated string holding the result of the latest call to
+       sql_status_text , or NULL. */
+    char *sql_status_text;
+
 #ifndef NDEBUG
     int debug_color;
 #endif

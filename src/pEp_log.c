@@ -15,6 +15,7 @@
 
 #include "pEp_internal.h"
 #include "sql_reliability.h"
+#include "engine_sql.h"
 #include "timestamp.h"
 
 #include <stdio.h>
@@ -376,17 +377,17 @@ static PEP_STATUS _pEp_log_prepare_sql_statements(PEP_SESSION session)
     PEP_STATUS status = PEP_STATUS_OK;
     int sqlite_status = SQLITE_OK;
 
-#define CHECK_SQL_STATUS                       \
-    do {                                       \
-        if (sqlite_status != SQLITE_OK) {                               \
-            fprintf(stderr, "preparing an SQL statement failed: %s\n",  \
-                    sqlite3_errmsg(session->log_db));                   \
-        }                                                               \
-        if (sqlite_status != SQLITE_OK) {      \
-            WARN_ON_SQLITE_ERROR;              \
-            status = PEP_INIT_CANNOT_OPEN_DB;  \
-            goto end;                          \
-        }                                      \
+#define CHECK_SQL_STATUS                                                     \
+    do {                                                                     \
+        if (sqlite_status != SQLITE_OK) {                                    \
+            fprintf(stderr, "preparing an SQL statement failed: %i (%s)\n",  \
+                    sqlite_status, sqlite3_errmsg(session->log_db));         \
+        }                                                                    \
+        if (sqlite_status != SQLITE_OK) {                                    \
+            WARN_ON_SQLITE_ERROR;                                            \
+            status = PEP_INIT_CANNOT_OPEN_DB;                                \
+            goto end;                                                        \
+        }                                                                    \
     } while (false)
     sqlite_status
         = _safe_sqlite3_prepare_v2(session, session->log_db,
@@ -423,13 +424,12 @@ static PEP_STATUS _pEp_log_prepare_sql_statements(PEP_SESSION session)
     return status;
 }
 
-/* This is the same trick as init_count in pEpEngine.c , and relies on the same
-   restriction on concurrency as init:. init calls are *not* concurrent and the
-   first must complete with success before any other is initiated.
+/* This code relies on the same restriction on concurrency as init: init calls
+   are *not* concurrent and the first must complete with success before any
+   other is initiated.
 
-   Since the initialisation functions here are called by init we can rely on
-   the same restrictions for free, without affecting the user. */
-static volatile int database_running_clients = 0;
+   Since the initialisation functions here are only called by init we can rely
+   on the same restrictions for free, without affecting the user. */
 
 PEP_STATUS pEp_log_set_synchronous_database(PEP_SESSION session,
                                             bool synchronous)
@@ -448,10 +448,9 @@ PEP_STATUS pEp_log_set_synchronous_database(PEP_SESSION session,
     PEP_SQL_END_LOOP;
 
     assert(sqlite_status != SQLITE_LOCKED);
-    if (sqlite_status == SQLITE_BUSY) {
+    if (sqlite_status != SQLITE_OK) {
         status = PEP_INIT_CANNOT_OPEN_DB;
-        fprintf(stderr, "failed initialising the log database: "
-                "sqlite_status %i, %s\n",
+        fprintf(stderr, "failed initialising the log database: %i (%s)\n",
                 sqlite_status, sqlite3_errmsg(session->log_db));
     }
     return status;
@@ -475,12 +474,10 @@ static PEP_STATUS _pEp_log_initialize_database(PEP_SESSION session)
     }
     sqlite_status = sqlite3_open_v2(database_file_path, & session->log_db,
                                     SQLITE_OPEN_READWRITE
-                                    /*
-                                    | ((database_running_clients == 0)
+                                    | SQLITE_OPEN_FULLMUTEX
+                                    | (session->first_session_at_init_time
                                        ? SQLITE_OPEN_CREATE
-                                       : 0)
-                                    */| SQLITE_OPEN_CREATE
-                                    | SQLITE_OPEN_FULLMUTEX,
+                                       : 0),
                                     NULL);
     if (sqlite_status != SQLITE_OK) {
         sqlite3_close(session->log_db);
@@ -494,7 +491,7 @@ static PEP_STATUS _pEp_log_initialize_database(PEP_SESSION session)
        of schema and pragma modification we execute here seems to affect
        prepared statements badly in other threads, sometimes causing SQLITE_BUSY
        -- let us avoid all of that. */
-    if (database_running_clients == 0) {
+    if (session->first_session_at_init_time) {
         sqlite_status = sqlite3_exec(session->log_db,
                                      pEp_log_initialize_database_once_text,
                                      NULL, NULL, NULL);
@@ -545,16 +542,15 @@ static PEP_STATUS _pEp_log_initialize_database(PEP_SESSION session)
     pEp_log_set_synchronous_database(session, session->enable_log_synchronous);
 
  end:
-    /* Keep track of the number of existing sessions.  After this point there
-       is certainly at least one -- and therefore, crucially, it is no longer
-       necessary to create the schema. */
-    if (status == PEP_STATUS_OK) {
-        database_running_clients ++;
+    /* If this succeeded from from now on we can actually log to the database;
+       actually adding log entries is conditionalised on this field in order to
+       allow for very early logging, at initialisation time -- to different
+       destinations. */
+    if (status == PEP_STATUS_OK)
         session->log_database_initialised = true;
-    }
     else
         fprintf(stderr, "failed initialising the log database: "
-                "sqlite_status %i, %s\n",
+                "sqlite_status %i (%s)\n",
                 sqlite_status, sqlite3_errmsg(session->log_db));
     return status;
 }
@@ -601,9 +597,6 @@ static PEP_STATUS _pEp_log_finalize_database(PEP_SESSION session)
         status = PEP_UNKNOWN_DB_ERROR;
     /* Out of defensiveness. */
     session->log_db = NULL;
-
-    /* Keep track of how many sessions there are. */
-    database_running_clients --;
 
     return status;
 #undef CHECK_SQL

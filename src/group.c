@@ -14,6 +14,7 @@
 #include "map_asn1.h"
 #include "baseprotocol.h"
 #include "sync_api.h"
+#include "engine_sql.h"
 
 // ** Static functions
 /******************************************************************************************
