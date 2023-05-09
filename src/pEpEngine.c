@@ -49,10 +49,6 @@ DYNAMIC_API PEP_STATUS init(
 
     bool in_first = false;
 
-    assert(sqlite3_threadsafe());
-    if (!sqlite3_threadsafe())
-        return PEP_INIT_SQLITE3_WITHOUT_MUTEX;
-
     // a little race condition - but still a race condition
     // mitigated by calling caveat (see documentation)
 
@@ -85,6 +81,10 @@ DYNAMIC_API PEP_STATUS init(
     assert(_session);
     if (_session == NULL)
         goto enomem;
+
+    /* Remember if this session is indeed the first, which may be useful when
+       initialising subsystems. */
+    _session->first_session_at_init_time = in_first;
 
     _session->version = PEP_ENGINE_VERSION;
     _session->messageToSend = messageToSend;
@@ -123,22 +123,16 @@ DYNAMIC_API PEP_STATUS init(
 #define _LOG_API(...)    _INTERNAL_LOG_WITH_MACRO_NAME(PEP_LOG_API, __VA_ARGS__)
 #define _LOG_TRACE(...)  _INTERNAL_LOG_WITH_MACRO_NAME(PEP_LOG_TRACE, __VA_ARGS__)
 
-    status = init_databases(_session); /* Every database except log. */
-    if (status != PEP_STATUS_OK)
-        return status;
-
-    if (in_first) {
-
-        status = pEp_sql_init(_session);
-
-        // We need to init a few globals for message id that we'd rather not
-        // calculate more than once.
-        _init_globals();
-    }
-
-    status = pEp_prepare_sql_stmts(_session);
+    /* Initialise the management and system databases, but not the log database
+       (which has been initialised already if needed). */
+    status = pEp_sql_init(_session);
     if (status != PEP_STATUS_OK)
         goto pEp_error;
+
+    // We need to init a few globals for message id that we'd rather not
+    // calculate more than once.
+    if (in_first)
+        _init_globals();
 
     status = init_cryptotech(_session, in_first);
     if (status != PEP_STATUS_OK)
@@ -224,59 +218,45 @@ DYNAMIC_API void release(PEP_SESSION session)
     LOG_API("finalising session %p", session);
     bool out_last = false;
     int _count = --init_count;
-    
-    if ((_count < -1) || !session)
-        return;
-
-    if (session->transaction_in_progress_no != 0)
-        LOG_CRITICAL("at least an SQL transaction was not closed: there are"
-                     " %i nested transactions in progress at finalisation time",
-                     (int) session->transaction_in_progress_no);
-
+    if (_count < -1)
+        LOG_CRITICAL("_count is wrong: %i", _count);
     // a small race condition but still a race condition
     // mitigated by calling caveat (see documentation)
     // (release() is to be guarded by a mutex by the caller)
     if (_count == -1)
         out_last = true;
 
-    if (session) {
-        free_Sync_state(session);
+    if (session->transaction_in_progress_no != 0)
+        LOG_CRITICAL("at least an SQL transaction was not closed: there are"
+                     " %i nested transactions in progress at finalisation time",
+                     (int) session->transaction_in_progress_no);
 
-        // Clear the path cache, releasing a little memory.
+    /* Free local data. */
+    free(session->sql_status_text);
+
+    free_Sync_state(session);
+
+    /* Clear the path cache, releasing a little memory. */
+    if (out_last)
         clear_path_cache();
 
-        if (session->db) {
-            LOG_EVENT("finalizing database state for session %p", session);
-            pEp_finalize_sql_stmts(session);
-            if (session->db) {
-                if (out_last) {
-                    sqlite3_exec(        
-                        session->db,
-                        "PRAGMA optimize;\n",
-                        NULL,
-                        NULL,
-                        NULL
-                    );
-                }    
-                sqlite3_close_v2(session->db);
-            }
-            if (session->system_db)
-                sqlite3_close_v2(session->system_db);
-        }
+    /* Finalise the Echo subsystem, which uses the management database... */
+    echo_finalize(session);
 
-        if (!EMPTYSTR(session->curr_passphrase)) {
-            free (session->curr_passphrase);
-            /* In case the following freeing code still uses the field. */
-            session->curr_passphrase = NULL;
-        }
+    /* ... And then finalise the database subsystem. */
+    pEp_sql_finalize(session, out_last);
 
-        echo_finalize(session);
-
-        release_transport_system(session, out_last);
-        release_cryptotech(session, out_last);
-        pEp_log_finalize(session);
-        free(session);
+    if (!EMPTYSTR(session->curr_passphrase)) {
+        free (session->curr_passphrase);
+        /* In case the following freeing code still uses the field. */
+        session->curr_passphrase = NULL;
     }
+
+    release_transport_system(session, out_last);
+    release_cryptotech(session, out_last);
+    LOG_API("session %p finalised", session);
+    pEp_log_finalize(session);
+    free(session);
 }
 
 /* Return true iff PEP_STATUS has one of the intended values.  This never
@@ -855,9 +835,8 @@ DYNAMIC_API PEP_STATUS get_default_own_userid(
     }
 
     *userid = retval;
-
     sql_reset_and_clear_bindings(session->get_default_own_userid);
-    
+    LOG_NONOK_STATUS_NONOK;
     return status;
 }
 
@@ -1638,6 +1617,7 @@ DYNAMIC_API PEP_STATUS set_identity(
     int result;
     PEP_STATUS status = PEP_STATUS_OK;
     bool has_fpr = (!EMPTYSTR(identity->fpr));
+    pEp_identity* ident_copy = NULL;
 
     if (identity->lang[0]) {
         PEP_ASSERT(identity->lang[0] >= 'a' && identity->lang[0] <= 'z');
@@ -1671,7 +1651,7 @@ DYNAMIC_API PEP_STATUS set_identity(
 
     // We do this because there are checks in set_person for
     // aliases, which modify the identity object on return.
-    pEp_identity* ident_copy = identity_dup(identity); 
+    ident_copy = identity_dup(identity); 
     if (!ident_copy)
         FAIL(PEP_OUT_OF_MEMORY);
 
@@ -3982,13 +3962,16 @@ DYNAMIC_API PEP_STATUS reset_pEptest_hack(PEP_SESSION session)
 {
     PEP_REQUIRE(session);
 
-    int int_result = sqlite3_exec(
+    int int_result = SQLITE_OK;
+    PEP_SQL_BEGIN_LOOP(int_result);
+    int_result = sqlite3_exec(
         session->db,
         "delete from identity where address like '%@pEptest.ch' ;",
         NULL,
         NULL,
         NULL
     );
+    PEP_SQL_END_LOOP();
     PEP_WEAK_ASSERT_ORELSE_RETURN(int_result == SQLITE_OK, PEP_UNKNOWN_DB_ERROR);
 
     int_result = pEp_sqlite3_prepare_v2_nonbusy_nonlocked(session, session->db, sql_get_all_keys_for_identity,

@@ -7,13 +7,30 @@
 
 #include "pEp_internal.h"
 
+/* Initialisation and finalisation
+ * ***************************************************************** */
+
+PEP_STATUS pEp_sql_init(PEP_SESSION session);
+PEP_STATUS pEp_sql_finalize(PEP_SESSION session,
+                            bool is_this_the_last_session);
+
+
+/* Debugging
+ * ***************************************************************** */
+
+/* Return a written representation of the current SQL state for the management
+   db in the pointed session, suitable for logging or printing.  The returned
+   memory is session-local, and will remain valid until the next call to this
+   same function with the same session.
+   In case of any error this still returns a valid non-empty string. */
+const char *pEp_sql_status_text(PEP_SESSION session);
+
+
+/* Literal strings with queries, for SQL prepared statements
+ * ***************************************************************** */
+
 // increment this when patching DDL
 #define _DDL_USER_VERSION "19"
-
-PEP_STATUS init_databases(PEP_SESSION session);
-PEP_STATUS pEp_sql_init(PEP_SESSION session);
-PEP_STATUS pEp_prepare_sql_stmts(PEP_SESSION session);
-PEP_STATUS pEp_finalize_sql_stmts(PEP_SESSION session);
 
 /* The strings below are not always all used in a C file, so it is normal that
    a lot of these variables are unused: we do not want warnings, nor complicated
