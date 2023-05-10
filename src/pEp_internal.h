@@ -570,6 +570,12 @@ struct _pEpSession {
        sql_status_text , or NULL. */
     char *sql_status_text;
 
+    /* True iff it is possible to reset database connections for the current
+       session.  Resetting database connections is used as a last resort in case
+       of concurrency problems.  See the comment for
+       pEp_refresh_database_connections in engine_sql.h */
+    bool can_refresh_database_connections;
+
 #ifndef NDEBUG
     int debug_color;
 #endif
