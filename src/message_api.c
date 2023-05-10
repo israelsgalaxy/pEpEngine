@@ -6514,8 +6514,6 @@ DYNAMIC_API PEP_STATUS decrypt_message(
     PEP_REQUIRE(session && src && dst && keylist && flags && rating);
     * rating = PEP_rating_undefined;
 
-    LOG_MESSAGE_TRACE("src is", src);
-
     /* Do the actual work. */
     PEP_STATUS res = decrypt_message_2(session, src, dst, keylist, flags);
 
