@@ -4251,11 +4251,11 @@ static PEP_STATUS protocol_version_upgrade_or_ignore(
     PEP_STATUS status = PEP_STATUS_OK;        
     int ver_compare = compare_versions(major, minor, ident->major_ver, ident->minor_ver);
     if (ver_compare > 0) {
-        status = set_protocol_version(session, ident, major, minor);
-        LOG_EVENT("%s <%s> upgrading to protocol version %i.%i: %i 0x%x %s",
+        LOG_EVENT("%s <%s> upgrading protocol version from %i.%i to %i.%i: %i 0x%x %s",
                   ASNONNULLSTR(ident->username), ASNONNULLSTR(ident->address),
-                  major, minor,
+                  ident->major_ver, ident->minor_ver, major, minor,
                   (int) status, (int) status, pEp_status_to_string(status));
+        status = set_protocol_version(session, ident, major, minor);
     }
     return status;    
 }
