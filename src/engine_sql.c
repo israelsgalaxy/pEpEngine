@@ -6,6 +6,8 @@
 
 #include "pEp_internal.h"
 #include "engine_sql.h"
+#include "echo_api.h"  /* for echo_finalize and echo_initialize ,
+                          needed by pEp_refresh_database_connections . */
 
 /* Prevent people from using obsolete feature macros thinking that they still
    work. */
@@ -2095,23 +2097,74 @@ PEP_STATUS pEp_sql_finalize(PEP_SESSION session,
     status = _finalize_sql_stmts(session);
     LOG_NONOK_STATUS_CRITICAL;  /* It is probably useless to abort here. */
 
-    /* Now we can close the database. */
-    if (session->db) {
-        if (is_this_the_last_session) {
-            int int_result = SQLITE_OK;
-            PEP_SQL_BEGIN_LOOP(int_result);
-                int_result = sqlite3_exec(session->db,
-                                          "PRAGMA optimize;\n",
-                                          NULL, NULL, NULL);
-            PEP_SQL_END_LOOP();
-        }
-        sqlite3_close_v2(session->db);
+    /* Now we can close database connections. */
+    PEP_ASSERT(session->db);
+    PEP_ASSERT(session->system_db);
+    if (is_this_the_last_session) {
+        int int_result = SQLITE_OK;
+        PEP_SQL_BEGIN_LOOP(int_result);
+        int_result = sqlite3_exec(session->db,
+                                  "PRAGMA optimize;\n",
+                                  NULL, NULL, NULL);
+        PEP_SQL_END_LOOP();
     }
-    if (session->system_db)
-        sqlite3_close_v2(session->system_db);
+    sqlite3_close_v2(session->db);
+    sqlite3_close_v2(session->system_db);
+
+    /* Out of defensiveness, clear database connection pointers. */
+    session->db = NULL;
+    session->system_db = NULL;
 
     return status;
 }
+
+PEP_STATUS pEp_refresh_database_connections(PEP_SESSION session)
+{
+    PEP_REQUIRE(session && session->can_refresh_database_connections);
+    LOG_EVENT();
+
+#define CHECK                         \
+    do {                              \
+        if (status != PEP_STATUS_OK)  \
+            goto end;                 \
+    } while (false)
+
+    PEP_STATUS status = PEP_STATUS_OK;
+
+    /* Temporarily pretend that this is not the first session; we are going to
+       re-initialise subsystems, but this is not the first time for any of them
+       and that is the case even if the current session happens to have been
+       initialised first. */
+    bool original_first_session_at_init_time
+        = session->first_session_at_init_time;
+    session->first_session_at_init_time = false;
+
+    /* Finalise every subsystem which depends on databases. */
+    status = echo_finalize(session);
+    CHECK;
+
+    /* Finalise and then re-initialies databases. */
+    status = pEp_sql_finalize(session, false);
+    CHECK;
+    status = pEp_sql_init(session);
+    CHECK;
+
+    /* Re-initialise the subsystems we finalised earlier. */
+    status = echo_initialize(session);
+    CHECK;
+
+    LOG_TRACE("database connections have been refreshed for session %p", session);
+
+    /* Restore the correct original_first_session_at_init_time. */
+    session->first_session_at_init_time = original_first_session_at_init_time;
+    LOG_STATUS_TRACE;
+
+ end:
+    LOG_NONOK_STATUS_CRITICAL;
+    return status;
+#undef CHECK
+}
+
 
 
 /* Debugging

@@ -12,6 +12,7 @@
 
 #include "pEp_internal.h"
 #include "pEpEngine.h"
+#include "pEp_debug.h"  /* for PEP_safety_mode*/
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,6 +54,15 @@ extern "C" {
 
 /* Once every this number of consecutive backoffs log one message. */
 #define PEP_BACKOFF_TIMES_BEFORE_LOGGING       1
+
+/* Once every this number of consecutive backoffs refresh database connections.
+   See the pEp_refresh_database_connections comment in pEp_sql.h . */
+#define PEP_BACKOFF_TIMES_BEFORE_REFRESHING_DB                            \
+    ((PEP_SAFETY_MODE == PEP_SAFETY_MODE_RELEASE)                         \
+     ? 20     /* only refresh when we are in an infinite-looking loop */  \
+     : (PEP_SAFETY_MODE == PEP_SAFETY_MODE_DEBUG                          \
+        ? 10   /* make it easy enough to trigger on purpose */             \
+        : 6))  /* make it very easy to trigger even with normal use */
 
 #if 0
 /* Once every this number of consecutive backoffs force a checkpoint, to avoid
@@ -214,7 +224,11 @@ PEP_STATUS pEp_backoff_state_finalize(
            if (* _pEp_sql_sqlite_status_address == SQLITE_BUSY) {               \
                 /* Only for defensiveness's sake: */                            \
                 * _pEp_sql_sqlite_status_address = SQLITE_OK;                   \
-                /* This attempt failed.  Back off... */                         \
+                /* This attempt failed.  Back off...  Notice that, if we have   \
+                   failed with SQLITE_BUSY a sufficiently high number of time   \
+                   and we are in a state in which database connection           \
+                   refreshing is possible, this can refresh database            \
+                   connections. */                                              \
                 PEP_STATUS _pEp_sql_state                                       \
                     = pEp_back_off(session, & _pEp_sql_backoff_state);          \
                 PEP_ASSERT(_pEp_sql_state == PEP_STATUS_OK);                    \
@@ -296,6 +310,11 @@ PEP_STATUS pEp_backoff_state_finalize(
  *  @brief     Begin an exclusive transaction on the management database.  */
 #define PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION()                                   \
     do {                                                                        \
+        /* It is possible to refresh database connections, as per               \
+           pEp_refresh_database_connections , during the execution of this      \
+           block.  See the pEp_refresh_database_connections comment in          \
+           engine_sql.h . */                                                    \
+        session->can_refresh_database_connections = true;                       \
         PEP_ASSERT(session->transaction_in_progress_no >= 0);                   \
         /* Do nothing other than bumping the counter if this is a transaction   \
            nested inside another transaction already in progress. */            \
@@ -337,6 +356,9 @@ PEP_STATUS pEp_backoff_state_finalize(
            pEp_sqlite3_step_nonbusy . */                                        \
         session->transaction_in_progress_no = 1;                                \
         LOG_TRACE("PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION (innermost, success)");  \
+        /* From now on it is no longer possible to refresh the database         \
+           connection. */                                                       \
+        session->can_refresh_database_connections = false;                      \
     } while (false)
 
 /* This macro factors the common logic of PEP_SQL_COMMIT_TRANSACTION and
@@ -420,13 +442,24 @@ PEP_STATUS pEp_backoff_state_finalize(
  * ***************************************************************** */
 
 /* This provides the same API as sqlite3_step, making use of the functionality
-   above which executes the SQL statement inside a new exclusive trnasaction --
+   above which executes the SQL statement inside a new exclusive transaction --
    unless another transaction is in progress.
    The actual documentation of sqlite3_step is at
    https://www.sqlite.org/capi3ref.html#sqlite3_step .  This function has the
-   same API, but cannot return SQLITE_BUSY . */
-int pEp_sqlite3_step_nonbusy(PEP_SESSION session,
-                             sqlite3_stmt *statement);
+   same API, but cannot return SQLITE_BUSY .
+
+   Because of the complexity introduced by database connection refreshing (see
+   the pEp_refresh_database_connections comment in engine_sql.h) this cannot
+   simply be a function taking a pointer to an SQLite prepared statement;
+   instead we need a pointer-to-pointer, since it is possible that a prepared
+   statement stored in the session *changes* during the execution of this
+   function.  However...*/
+int _pEp_sqlite3_step_nonbusy(PEP_SESSION session,
+                              sqlite3_stmt **statement_p);
+/* ...This macro provides a more intuitive interface for
+   _pEp_sqlite3_step_nonbusy hiding the extra statement indirection. */
+#define pEp_sqlite3_step_nonbusy(session, statement) \
+    _pEp_sqlite3_step_nonbusy((session), & (statement))
 
 /* Following the same idea of pEp_sqlite3_step_nonbusy, these function serve to
    prepare a statement in a possibly concurrent context, without worrying about

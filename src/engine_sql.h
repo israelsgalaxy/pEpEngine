@@ -14,6 +14,27 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session);
 PEP_STATUS pEp_sql_finalize(PEP_SESSION session,
                             bool is_this_the_last_session);
 
+/* In order to guarantee that concurrent accesses to the management database,
+   possibly from multiple threads, happen correctly and without having failures
+   inside transactions, we surround SQL statements with
+     BEGIN EXCLUSIVE TRANSACTION;
+     ...
+     COMMIT TRANSACTION or ROLLBACK TRANSACTION;
+   The execution of BEGIN EXCLUSIVE TRANSACTION in C always happens in a loop
+   that automatically retries until the lock is acquired.  This feature is
+   implemented in sql_reliability.h .
+   Acquiring the lock at the beginning of the exclusive transaction becomes the
+   main contention point between threads.  Unfortunately there are cases in
+   which acquiring the lock seems to loop forever, even if no other threads are
+   racing.  As a last resort, after PEP_BACKOFF_TIMES_BEFORE_REFRESHING_DB
+   consecutive failures to begin an exclusive transaction, we close and reopen
+   the database connection, re-preparing every SQL statement.  After this
+   "refresh" it becomes possible to begin an exclusive transaction again.
+   This function implements refreshing.
+   Notice that refreshing is only legitimate while the SQL statement we are
+   failing to execute is BEGIN EXCLUSIVE TRANSACTION. */
+PEP_STATUS pEp_refresh_database_connections(PEP_SESSION session);
+
 
 /* Debugging
  * ***************************************************************** */
