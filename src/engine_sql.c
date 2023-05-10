@@ -1795,7 +1795,8 @@ PEP_STATUS pEp_sql_init(PEP_SESSION session) {
  "PRAGMA foreign_key=ON;\n"
  "PRAGMA synchronous=NORMAL;\n" // not persistent!
  "PRAGMA secure_delete = OFF;\n"
- "PRAGMA SQLITE_DEFAULT_WAL_AUTOCHECKPOINT = 1;\n" /* checkpoint often. */
+// "PRAGMA SQLITE_DEFAULT_WAL_AUTOCHECKPOINT = 1;\n" /* checkpoint often. */
+ "PRAGMA SQLITE_DEFAULT_WAL_AUTOCHECKPOINT = 100000;\n" // checkpoint very rarely.  This is a test.
  "",
            NULL, NULL, NULL);
         if (int_result != SQLITE_OK) {
