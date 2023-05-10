@@ -231,7 +231,7 @@ PEP_STATUS base_extract_message(
        not terribly important: this engine branch will not live long, and
        v3 does not need this same hack. */
     char *_fpr = NULL;
-    bool _require_signature;
+    bool _require_signature = false;
     switch (type) {
     case BASE_SYNC:
         _require_signature = true;
