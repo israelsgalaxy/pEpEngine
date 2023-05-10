@@ -2150,7 +2150,7 @@ PEP_STATUS pEp_refresh_database_connections(PEP_SESSION session)
     status = echo_initialize(session);
     CHECK;
 
-    LOG_TRACE("database connections have been reset for session %p", session);
+    LOG_TRACE("database connections have been refreshed for session %p", session);
 
     /* Restore the correct original_first_session_at_init_time. */
     session->first_session_at_init_time = original_first_session_at_init_time;
