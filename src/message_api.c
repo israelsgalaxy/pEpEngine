@@ -1592,13 +1592,13 @@ static PEP_STATUS encrypt_PGP_MIME(
     char *mimetext = NULL;
     size_t csize;
     dst->enc_format = PEP_enc_PGP_MIME;
-
+    message *_src = NULL;
     if (src->shortmsg) {
         dst->shortmsg = strdup(src->shortmsg);
         PEP_WEAK_ASSERT_ORELSE_GOTO(dst->shortmsg, enomem);
     }
 
-    message *_src = calloc(1, sizeof(message));
+    _src = calloc(1, sizeof(message));
     PEP_WEAK_ASSERT_ORELSE_GOTO(_src, enomem);
 //    _src->longmsg = ptext;
     _src->longmsg = src->longmsg;
@@ -7080,7 +7080,7 @@ PEP_STATUS normalize_fpr(PEP_SESSION session, char **normalized_fpr,
  *  @internal
  *  <!--        text_to_bytes()       -->
  *
- *  @brief      Decodea '\0'-terminated string of hexadecimal digits into a
+ *  @brief      Decode a '\0'-terminated string of hexadecimal digits into a
  *              fresh array of bytes along with its size.
  *
  *  @param[in]  session             session handle
@@ -7116,6 +7116,7 @@ static PEP_STATUS text_to_bytes(PEP_SESSION session,
     PEP_STATUS status = PEP_STATUS_OK;
     char *text;
     unsigned char *result = NULL;
+    size_t byte_no = /* initialising only to silence a spurious GCC warning */ 0;
     status = normalize_fpr(session, & text, non_normalized_text);
     if (status != PEP_STATUS_OK)
         FAIL(status);
@@ -7125,7 +7126,7 @@ static PEP_STATUS text_to_bytes(PEP_SESSION session,
 
     /* Allocate the result. */
     int hex_digit_no = strlen(text);
-    size_t byte_no = hex_digit_no / 2;
+    byte_no = hex_digit_no / 2;
     result = calloc(byte_no, 1);
     if (result == NULL)
         FAIL(PEP_OUT_OF_MEMORY);
