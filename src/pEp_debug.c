@@ -18,9 +18,9 @@
 DYNAMIC_API void pEp_abort_unless_PEP_NOABORT(PEP_SESSION session)
 {
     /* No PEP_REQUIRE here, on purpose:
-
        in this function we do not check that session be non-NULL, in order to be
        more friendly to debugging. */
+    PEP_ICS_DUMMY;
 
     const char *text = ("this was Engine " PEP_ENGINE_VERSION_LONG);
 

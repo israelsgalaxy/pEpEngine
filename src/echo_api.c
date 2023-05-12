@@ -512,6 +512,8 @@ PEP_STATUS handle_pong(PEP_SESSION session,
                        const pEp_identity *partner_identity,
                        const Distribution_t *pong_distribution_message)
 {
+    PEP_REQUIRE(session);
+
     /* Sanity checks. */
     if (! (session && own_identity && partner_identity
            && pong_distribution_message))
@@ -607,8 +609,7 @@ static PEP_STATUS send_ping_or_pong(PEP_SESSION session,
                                     bool ping)
 {
     /* Sanity checks. */
-    if (! (session && session->messageToSend && from && to))
-        return PEP_ILLEGAL_VALUE;
+    PEP_REQUIRE(session && session->messageToSend && from && to);
 
     /* Do nothing, and succeed, if the Echo protocol is disabled. */
     if (! session->enable_echo_protocol) {

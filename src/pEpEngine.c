@@ -82,6 +82,9 @@ DYNAMIC_API PEP_STATUS init(
     if (_session == NULL)
         goto enomem;
 
+    /* Initialise the Implicit Call Stack state, very early. */
+    ics_initialize(& _session->ics_state);
+
     /* Remember if this session is indeed the first, which may be useful when
        initialising subsystems. */
     _session->first_session_at_init_time = in_first;
@@ -124,6 +127,9 @@ DYNAMIC_API PEP_STATUS init(
 #define _LOG_EVENT(...)  _INTERNAL_LOG_WITH_MACRO_NAME(PEP_LOG_EVENT, __VA_ARGS__)
 #define _LOG_API(...)    _INTERNAL_LOG_WITH_MACRO_NAME(PEP_LOG_API, __VA_ARGS__)
 #define _LOG_TRACE(...)  _INTERNAL_LOG_WITH_MACRO_NAME(PEP_LOG_TRACE, __VA_ARGS__)
+
+    /* We are going to use the log from now on. */
+    PEP_ICS_DUMMY;
 
     /* Initialise the management and system databases, but not the log database
        (which has been initialised already if needed). */
@@ -268,6 +274,9 @@ DYNAMIC_API void release(PEP_SESSION session)
     release_cryptotech(session, out_last);
     LOG_API("session %p finalised", session);
     pEp_log_finalize(session);
+
+    /* Finalise the Implicit Call Stack state, very late. */
+    ics_finalize(& session->ics_state);
     free(session);
 }
 

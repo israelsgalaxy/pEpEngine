@@ -379,10 +379,10 @@ PEP_STATUS has_key_reset_been_sent(
         const char* revoked_fpr,
         bool* contacted)
 {
-    PEP_ASSERT(session
-               && ! EMPTYSTR(from_addr) && ! EMPTYSTR(user_id)
-               && ! EMPTYSTR(revoked_fpr)
-               && contacted);
+    PEP_REQUIRE(session
+                && ! EMPTYSTR(from_addr) && ! EMPTYSTR(user_id)
+                && ! EMPTYSTR(revoked_fpr)
+                && contacted);
     
     *contacted = false;
                     

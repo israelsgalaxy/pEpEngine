@@ -119,6 +119,7 @@ HEADERS_TO_INSTALL = \
   echo_api.h distribution_api.h media_key.h \
   map_asn1.h \
   platform.h platform_unix.h platform_windows.h platform_zos.h \
+  ics.h \
   pEp_debug.h pEp_log.h sql_reliability.h \
   pEpEngine_version.h \
   transport.h growing_buf.h $(wildcard ../asn.1/*.h)

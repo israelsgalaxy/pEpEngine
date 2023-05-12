@@ -949,8 +949,7 @@ PEP_STATUS elect_ownkey(
         PEP_SESSION session, pEp_identity * identity
     )
 {
-    if (!(session && identity))
-        return PEP_ILLEGAL_VALUE;
+    PEP_REQUIRE(session && identity);
 
     PEP_STATUS status;
     stringlist_t *keylist = NULL;

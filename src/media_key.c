@@ -262,7 +262,7 @@ PEP_STATUS media_key_has_identity_a_media_key(PEP_SESSION session,
 
     LOG_NONOK_STATUS_WARNING;
     if (status == PEP_STATUS_OK)
-        LOG_TRACE("%s <%s>: %s", ASNONNULLSTR(identity->username), ASNONNULLSTR(identity->address), ((* has_media_key) ? "yes" : "no"));
+        LOG_TRACE("%s <%s>: %s", ASNONNULLSTR(identity->username), ASNONNULLSTR(identity->address), BOOLTOSTR(* has_media_key));
 
     return status;
 }
@@ -276,12 +276,13 @@ PEP_STATUS identity_known_to_use_pEp(PEP_SESSION session,
                                      bool *known_to_use_pEp)
 {
     // TEMPORARY: begin
+    PEP_REQUIRE(true);
     PEP_ASSERT(session && identity && known_to_use_pEp);
     PEP_ASSERT(! EMPTYSTR(identity->address));
     PEP_ASSERT(! EMPTYSTR(identity->user_id));
     // TEMPORARY: end
-    /* Sanity checks. */
-    PEP_REQUIRE(session && identity && known_to_use_pEp
+    /* Sanity checks. */ // FIXME: this should become PEP_REQUIRE again after I fix https://gitea.pep.foundation/pEp.foundation/pEpEngine/issues/162
+    PEP_ASSERT(session && identity && known_to_use_pEp
                 && ! EMPTYSTR(identity->address)
                 && ! EMPTYSTR(identity->user_id));
 

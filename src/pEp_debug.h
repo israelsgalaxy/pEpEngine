@@ -85,6 +85,20 @@ typedef enum {
     (PEP_SAFETY_MODE >= PEP_SAFETY_MODE_DEBUG)
 
 
+/* ICS
+ * ***************************************************************** */
+
+/* This must be expanded exactly once per function whenever the ICS
+   functionality is used; after that point it will be possible to refer to the
+   current ICS depth.  in practice it is convenient to have this macro expanded
+   from PEP_REQUIRE, which is used once in almost every function.
+   The expansion is *not* a single C statement or even a block; unfortunately
+   we require the automatic variable _ics_nest_level to remain in scope
+   throughout the function body. */
+#define PEP_ICS_SET_FOR_THIS_FUNCTION  \
+    ICS_ENTER(& session->ics_state);
+
+
 /* Assertions and requirements
  * ***************************************************************** */
 
@@ -102,11 +116,14 @@ typedef enum {
    which is always included anyway, and the logging level which is
    "function". */
 #if defined (PEP_LOG_FUNCTION_ENTRY)
-#   define _PEP_LOG_FUNCTION_ENTRY_IF_ENABLED  \
-        PEP_LOG_FUNCTION("p≡p", "Engine", "")
+#   define _PEP_LOG_FUNCTION_ENTRY_IF_ENABLED   \
+    do {                                        \
+        PEP_LOG_FUNCTION("p≡p", "Engine", "");  \
+    } while (false)
 #else
 #   define _PEP_LOG_FUNCTION_ENTRY_IF_ENABLED  \
-    do { } while (false)
+    do {                                       \
+    } while (false)
 #endif
 
 /* Same idea as LOG_FUNCTION_ENTRY, for local checks.  The argument is the
@@ -267,6 +284,10 @@ typedef enum {
 /* This has the same role as _PEP_WEAK_ASSERT_ORELSE.  See its comment. */
 #define _PEP_REQUIRE_ORELSE(expression, expression_as_string,  \
                             else_statement)                    \
+    /* Yes, this does not expand to a single statement or even to a block; but  \
+       we need declarations from ICS_ENTER to be visible in the entire body     \
+       this macro is called.*/                                                  \
+    PEP_ICS_SET_FOR_THIS_FUNCTION;                                              \
     do {                                                                        \
         /* This is used at the beginning of more or less every function, so why \
            not getting this log entry for free?  Of course this will not be     \

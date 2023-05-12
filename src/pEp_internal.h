@@ -125,6 +125,8 @@
 #include "sync_api.h"
 #include "Sync_func.h"
 
+#include "ics.h"
+
 
 /* Detailed versioning.
  * ***************************************************************** */
@@ -652,6 +654,9 @@ struct _pEpSession {
        of concurrency problems.  See the comment for
        pEp_refresh_database_connections in engine_sql.h */
     bool can_refresh_database_connections;
+
+    /* Implicit Call Stack state. */
+    struct ics_state ics_state;
 
 #ifndef NDEBUG
     int debug_color;

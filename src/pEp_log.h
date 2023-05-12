@@ -413,6 +413,27 @@ typedef enum {
 #   define PEP_func_OR_PRETTY_FUNCTION  __func__
 #endif
 
+/* ICS
+ * ***************************************************************** */
+
+/* Expand to a dummy initialising declaration of the ICS automatic variable
+   _ics_nest_level , to be used in contexts where PEP_ICS_SET_FOR_THIS_FUNCTION
+   or PEP_REQUIRE are not appropriate (see pEp_debug.h ) but we still want to
+   log. */
+#define PEP_ICS_DUMMY                                  \
+    int _ics_nest_level __attribute__ ((unused)) = 0;
+
+/* Update the current nesting level as stored in the ICS struct, copying from
+   the automatic variable which is always the most up-to-date. */
+#define PEP_ICS_UPDATE                                    \
+    do {                                                  \
+        session->ics_state.nest_level = _ics_nest_level;  \
+    } while (false)
+
+
+/* Internal macros
+ * ***************************************************************** */
+
 /* The macros here are used internally to implement the user macros above. */
 
 // Disabled in early 2023 since now unused: see the comment above about the
@@ -470,6 +491,10 @@ typedef enum {
  */
 #define PEP_LOG_WITH_SESSION_AND_LEVEL(session, level, system, subsystem, ...)  \
     do {                                                                        \
+        /* This is a good opportunity to update the current stack depth.  It    \
+           is even a good idea to do this when *not* actually logging because   \
+           of the current maximum level. */                                     \
+        PEP_ICS_UPDATE;                                                         \
         /* The level argument will be a compile-time constant in almost every   \
            conceivable use case.  This is a good opportunity to optimise away   \
            the entire macro call when this entry exceeds the maximum            \
@@ -498,12 +523,14 @@ typedef enum {
             _pEp_log_entry = "could not heap-allocate log string!";             \
         else                                                                    \
             _pEp_log_entry = _pEp_log_heap_string;                              \
+        /* Finally log. */                                                      \
         pEp_log((session),                                                      \
                 (level),                                                        \
                 (system),                                                       \
                 (subsystem),                                                    \
                 __FILE__,                                                       \
                 __LINE__,                                                       \
+                _ics_nest_level,                                                \
                 PEP_func_OR_PRETTY_FUNCTION,                                    \
                 _pEp_log_entry);                                                \
         free (_pEp_log_heap_string);                                            \
@@ -538,6 +565,8 @@ typedef enum {
  *  @param[in]   source_file_line the source line number to log, 1-based; this
  *                                is meant to be the expansion of __LINE__ at
  *                                this function's call site.
+ *  @param[in]   ics_nest_level   the nesting level, as stored in the automatic
+ *                                variable _ics_nest_level .  See ics.h
  *  @param[in]   function_name    the function name to log; this is meant
  *                                to be the expansion of __func__ (or better
  *                                __PRETTY_FUNCTION__, when available) at this
@@ -558,6 +587,7 @@ DYNAMIC_API PEP_STATUS pEp_log(PEP_SESSION session,
                                const char *subsystem,
                                const char *source_file_name,
                                int source_file_line,
+                               int ics_nest_level,
                                const char *function_name,
                                const char *entry);
 

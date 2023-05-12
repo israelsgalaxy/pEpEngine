@@ -151,6 +151,7 @@ static const char* _log_level_to_string(PEP_LOG_LEVEL level)
     "%s%s%s"                        /* system, subsystem */   \
     " %" PRId64 "/%" PRId64         /* pid, tid */            \
     " %s"                           /* log level */           \
+    "%s"                            /* call depth spaces */   \
     " %s:%i%s%s"                    /* source location */     \
     "%s%s"                          /* entry */
 #define PEP_LOG_PRINTF_ACTUALS_NO_DATE                            \
@@ -158,8 +159,9 @@ static const char* _log_level_to_string(PEP_LOG_LEVEL level)
         subsystem,                                                \
     pid_and_tid.pid, pid_and_tid.tid,                             \
     _log_level_to_string(level),                                  \
+    call_depth_spaces,                                            \
     source_file_name, source_file_line, function_prefix,          \
-        function_name,                                            \
+        ics_and_function_name,                                    \
     entry_prefix, entry
 
 
@@ -209,6 +211,7 @@ static int _safe_sqlite3_prepare_v2(
   sqlite3_stmt **ppStmt,  /* OUT: Statement handle */
   const char **pzTail     /* OUT: Pointer to unused portion of zSql */
 ) {
+    PEP_ICS_DUMMY;
     int sqlite_status;
     int failure_no = 0;
     PEP_SQL_BEGIN_LOOP;
@@ -344,7 +347,7 @@ static const char *pEp_log_insert_text =
 "   (Level, Pid, Tid, System, Subsystem, Source_file_name, Source_file_line,"
 "    Function_name, Entry)"
 " VALUES"
-"   (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);";
+"   (?1, ?2, ?3, ?4, ?5, ?6 || ?7, ?8, ?9, ?10);";
 
 /* Delete the oldest row, if the total number of rows is large enough. */
 static const char *pEp_log_delete_oldest_text =
@@ -374,6 +377,7 @@ static const char *pEp_log_crashdump_text =
 /* Pepare the SQL statements worth preparing. */
 static PEP_STATUS _pEp_log_prepare_sql_statements(PEP_SESSION session)
 {
+    PEP_ICS_DUMMY;
     PEP_STATUS status = PEP_STATUS_OK;
     int sqlite_status = SQLITE_OK;
 
@@ -434,6 +438,7 @@ static PEP_STATUS _pEp_log_prepare_sql_statements(PEP_SESSION session)
 PEP_STATUS pEp_log_set_synchronous_database(PEP_SESSION session,
                                             bool synchronous)
 {
+    PEP_ICS_DUMMY;
     PEP_STATUS status = PEP_STATUS_OK;
     int sqlite_status = SQLITE_OK;
 
@@ -465,6 +470,7 @@ PEP_STATUS pEp_log_set_synchronous_database(PEP_SESSION session,
 /* Initialise the database subsystem.  Called once at session initialisation. */
 static PEP_STATUS _pEp_log_initialize_database(PEP_SESSION session)
 {
+    PEP_ICS_DUMMY;
     assert(session != NULL && session->log_db == NULL);
     if (! (session != NULL && session->log_db == NULL))
         return PEP_ILLEGAL_VALUE;
@@ -563,6 +569,7 @@ static PEP_STATUS _pEp_log_initialize_database(PEP_SESSION session)
 /* Finalise the database subsystem.  Called once at session release. */
 static PEP_STATUS _pEp_log_finalize_database(PEP_SESSION session)
 {
+    PEP_ICS_DUMMY;
     assert(session != NULL && session->log_db != NULL);
     if (! (session != NULL && session->log_db != NULL))
         return PEP_ILLEGAL_VALUE;
@@ -611,6 +618,7 @@ static PEP_STATUS _pEp_log_finalize_database(PEP_SESSION session)
    to be there already.  Do nothing otherwise. */
 static void _pEp_log_delete_oldest_row_when_too_many(PEP_SESSION session)
 {
+    PEP_ICS_DUMMY;
     int sqlite_status = SQLITE_OK;
 
     sql_reset_and_clear_bindings(session->log_delete_oldest_prepared_statement);
@@ -638,13 +646,15 @@ static PEP_STATUS _pEp_log_db(PEP_SESSION session,
                               const char *system,
                               const char *system_subsystem_separator,
                               const char *subsystem,
+                              const char *call_depth_spaces,
                               const char *source_file_name,
                               int source_file_line,
                               const char *function_prefix,
-                              const char *function_name,
+                              const char *ics_and_function_name,
                               const char *entry_prefix,
                               const char *entry)
 {
+    PEP_ICS_DUMMY;
     /* We cannot use PEP_REQUIRE here without risking an infinite loop. */
     assert(session != NULL && PEP_IMPLIES(session->log_database_initialised,
                                           session->log_db != NULL));
@@ -700,16 +710,19 @@ static PEP_STATUS _pEp_log_db(PEP_SESSION session,
                                       5, subsystem, -1, SQLITE_STATIC);
     CHECK_SQL(SQLITE_OK);
     sqlite_status = sqlite3_bind_text(session->log_insert_prepared_statement,
-                                      6, source_file_name, -1, SQLITE_STATIC);
+                                      6, call_depth_spaces, -1, SQLITE_STATIC);
+    CHECK_SQL(SQLITE_OK);
+    sqlite_status = sqlite3_bind_text(session->log_insert_prepared_statement,
+                                      7, source_file_name, -1, SQLITE_STATIC);
     CHECK_SQL(SQLITE_OK);
     sqlite_status = sqlite3_bind_int(session->log_insert_prepared_statement,
-                                     7, source_file_line);
+                                     8, source_file_line);
     CHECK_SQL(SQLITE_OK);
     sqlite_status = sqlite3_bind_text(session->log_insert_prepared_statement,
-                                      8, function_name, -1, SQLITE_STATIC);
+                                      9, ics_and_function_name, -1, SQLITE_STATIC);
     CHECK_SQL(SQLITE_OK);
     sqlite_status = sqlite3_bind_text(session->log_insert_prepared_statement,
-                                      9,
+                                      10,
                                       (EMPTYSTR(entry) ? NULL : entry), -1,
                                       SQLITE_STATIC);
     CHECK_SQL(SQLITE_OK);
@@ -748,10 +761,11 @@ static PEP_STATUS _pEp_log_file_star(FILE* file_star,
                                      const char *system,
                                      const char *system_subsystem_separator,
                                      const char *subsystem,
+                                     const char *call_depth_spaces,
                                      const char *source_file_name,
                                      int source_file_line,
                                      const char *function_prefix,
-                                     const char *function_name,
+                                     const char *ics_and_function_name,
                                      const char *entry_prefix,
                                      const char *entry)
 {
@@ -812,10 +826,11 @@ static PEP_STATUS _pEp_log_syslog(PEP_SESSION session,
                                   const char *system,
                                   const char *system_subsystem_separator,
                                   const char *subsystem,
+                                  const char *call_depth_spaces,
                                   const char *source_file_name,
                                   int source_file_line,
                                   const char *function_prefix,
-                                  const char *function_name,
+                                  const char *ics_and_function_name,
                                   const char *entry_prefix,
                                   const char *entry)
 {
@@ -881,10 +896,11 @@ static PEP_STATUS _pEp_log_android_log(PEP_SESSION session,
                                        const char *system,
                                        const char *system_subsystem_separator,
                                        const char *subsystem,
+                                       const char *call_depth_spaces,
                                        const char *source_file_name,
                                        int source_file_line,
                                        const char *function_prefix,
-                                       const char *function_name,
+                                       const char *ics_and_function_name,
                                        const char *entry_prefix,
                                        const char *entry)
 {
@@ -917,10 +933,11 @@ static PEP_STATUS _pEp_log_windows_log(PEP_SESSION session,
                                        const char *system,
                                        const char *system_subsystem_separator,
                                        const char *subsystem,
+                                       const char *call_depth_spaces,
                                        const char *source_file_name,
                                        int source_file_line,
                                        const char *function_prefix,
-                                       const char *function_name,
+                                       const char *ics_and_function_name,
                                        const char *entry_prefix,
                                        const char *entry)
 {
@@ -949,6 +966,7 @@ DYNAMIC_API PEP_STATUS pEp_log(PEP_SESSION session,
                                const char *subsystem,
                                const char *source_file_name,
                                int source_file_line,
+                               int ics_nest_level,
                                const char *function_name,
                                const char *entry)
 {
@@ -956,6 +974,15 @@ DYNAMIC_API PEP_STATUS pEp_log(PEP_SESSION session,
     assert(session);
     if (! session)
         return PEP_ILLEGAL_VALUE;
+
+    char *call_depth_spaces = NULL;
+    timestamp* now = NULL;
+    PEP_STATUS status = PEP_STATUS_OK;
+#define FAIL(the_status)        \
+    do {                        \
+        status = (the_status);  \
+        goto end;               \
+    } while (false);
 
     /* Before doing anything, check that the log level does not exceed the
        verbosity limit; if it does just return without doing anything. */
@@ -966,11 +993,23 @@ DYNAMIC_API PEP_STATUS pEp_log(PEP_SESSION session,
     if (! session->enable_log)
         return PEP_STATUS_OK;
 
+    /* Get the current call-depth spaces; also update the current depth in the
+       struct. */
+    int call_depth = ics_nest_level;
+    int call_depth_spaces_length = 2 * call_depth;
+    call_depth_spaces = malloc(call_depth_spaces_length + /* '\0' */1);
+    if (call_depth_spaces == NULL)
+        FAIL(PEP_OUT_OF_MEMORY);
+    int i;
+    for (i = 0; i < call_depth_spaces_length; i ++)
+        call_depth_spaces [i] = ' ';
+    call_depth_spaces [i] = '\0';
+
     /* Get the current time. */
     time_t now_in_seconds = time(NULL);
-    timestamp* now = new_timestamp(now_in_seconds);
+    now = new_timestamp(now_in_seconds);
     if (now == NULL)
-        return PEP_OUT_OF_MEMORY;
+        FAIL(PEP_OUT_OF_MEMORY);
 
     /* Get the current pid and tid. */
     struct pEp_pid_and_tid pid_and_tid;
@@ -1015,6 +1054,7 @@ DYNAMIC_API PEP_STATUS pEp_log(PEP_SESSION session,
     now,                                                                     \
     pid_and_tid,                                                             \
     system_subsystem_prefix, system, system_subsystem_separator, subsystem,  \
+    call_depth_spaces,                                                       \
     source_file_name, source_file_line, function_prefix, function_name,      \
     entry_prefix, entry
 
@@ -1034,7 +1074,6 @@ DYNAMIC_API PEP_STATUS pEp_log(PEP_SESSION session,
 
     /* Now log to each enabled destination, combining the status we obtain for
        every attempt.  Notice that we do not bail out on the first error. */
-    PEP_STATUS status = PEP_STATUS_OK;
 #if defined (PEP_HAVE_STDOUT_AND_STDERR)
     if (PEP_LOG_DESTINATIONS & PEP_LOG_DESTINATION_STDOUT)
         COMBINE_STATUS(_pEp_log_file_star(stdout, ACTUALS));
@@ -1060,8 +1099,11 @@ DYNAMIC_API PEP_STATUS pEp_log(PEP_SESSION session,
         COMBINE_STATUS(_pEp_log_windows_log(ACTUALS));
 #endif /* #if defined (PEP_HAVE_WINDOWS_LOG) */
 
-    free (now);
+end:
+    free(call_depth_spaces);
+    free(now);
     return status;
+#undef FAIL
 }
 
 

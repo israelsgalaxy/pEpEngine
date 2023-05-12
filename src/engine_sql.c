@@ -78,6 +78,8 @@ static int sql_trace_callback (unsigned trace_constant,
     PEP_SESSION session = (PEP_SESSION) session_as_context_ptr;
     /* Avoid PEP_REQUIRE_ORELSE here.  The output would be very distracting,
        for no benefit. */
+    PEP_ICS_DUMMY;
+
     switch (trace_constant) {
         case SQLITE_TRACE_STMT: {
             const char* X_str = (const char*) X;
@@ -119,6 +121,7 @@ static int sql_trace_callback (unsigned trace_constant,
 __attribute__((unused))
 void errorLogCallback(void *session_as_pArt, int iErrCode, const char *zMsg){
     PEP_SESSION session = (PEP_SESSION) session_as_pArt;
+    PEP_ICS_DUMMY;
     LOG_ERROR("(%d) %s", iErrCode, zMsg);
 }
 
@@ -137,6 +140,7 @@ void errorLogCallback(void *session_as_pArt, int iErrCode, const char *zMsg){
 static int db_contains_table(PEP_SESSION session, const char* table_name) {
     if (!session || !table_name)
         return -1;
+    PEP_ICS_DUMMY;
 
     // Table names can't be SQL parameters, so we do it this way.
 
@@ -262,6 +266,7 @@ static int table_contains_column(PEP_SESSION session, const char* table_name,
  *
  */
 PEP_STATUS repair_altered_tables(PEP_SESSION session) {
+    PEP_REQUIRE(session);
     PEP_STATUS status = PEP_STATUS_OK;
 
     char* table_names[_PEP_MAX_AFFECTED] = {0};
@@ -462,6 +467,8 @@ PEP_STATUS repair_altered_tables(PEP_SESSION session) {
  *
  */
 static PEP_STATUS upgrade_revoc_contact_to_13(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     // I HATE SQLITE.
     PEP_STATUS status = PEP_STATUS_OK;
     int int_result = 0;
@@ -620,6 +627,8 @@ static int user_version(void *_version, int count, char **text, char **name)
 }
 
 static PEP_STATUS _create_initial_tables(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -665,6 +674,8 @@ static PEP_STATUS _create_initial_tables(PEP_SESSION session) {
 }
 
 static PEP_STATUS _create_core_tables(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -733,8 +744,7 @@ static PEP_STATUS _create_core_tables(PEP_SESSION session) {
 }
 
 static PEP_STATUS _create_group_tables(PEP_SESSION session) {
-    if (!session)
-        return PEP_ILLEGAL_VALUE;
+    PEP_REQUIRE(session);
 
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
@@ -798,6 +808,8 @@ static PEP_STATUS _create_group_tables(PEP_SESSION session) {
 }
 
 static PEP_STATUS _create_supplementary_key_tables(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -845,6 +857,8 @@ static PEP_STATUS _create_supplementary_key_tables(PEP_SESSION session) {
 }
 
 static PEP_STATUS _create_misc_admin_tables(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -875,10 +889,7 @@ static PEP_STATUS _create_misc_admin_tables(PEP_SESSION session) {
 // The create tables string is now too large for the C standard, so we're going to break it up some.
 // I presume we use the enormous string for performance purposes... terrible for debugging purposes, but OK.
 PEP_STATUS create_tables(PEP_SESSION session) {
-
-    if (!session)
-        return PEP_ILLEGAL_VALUE;
-    
+    PEP_REQUIRE(session);
     PEP_STATUS status = PEP_STATUS_OK;
 
     status = _create_initial_tables(session);
@@ -903,6 +914,8 @@ PEP_STATUS create_tables(PEP_SESSION session) {
 }
 
 PEP_STATUS get_db_user_version(PEP_SESSION session, int* version) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -920,6 +933,8 @@ PEP_STATUS get_db_user_version(PEP_SESSION session, int* version) {
 
 // Only called if input version is 1
 static PEP_STATUS _verify_version(PEP_SESSION session, int* version) {
+    PEP_REQUIRE(session);
+
     // Sometimes the user_version wasn't set correctly.
     bool version_changed = true;
     int int_result __attribute__((__unused__));
@@ -992,6 +1007,8 @@ static PEP_STATUS _verify_version(PEP_SESSION session, int* version) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_2(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     // N.B. addition of device_group column removed in DDL v10
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
@@ -1012,6 +1029,8 @@ static PEP_STATUS _upgrade_DB_to_ver_2(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_5(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1039,6 +1058,8 @@ static PEP_STATUS _upgrade_DB_to_ver_5(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1140,6 +1161,8 @@ static PEP_STATUS _upgrade_DB_to_ver_6(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_7(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1189,6 +1212,8 @@ static PEP_STATUS _upgrade_DB_to_ver_7(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_8(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1245,8 +1270,9 @@ static PEP_STATUS _upgrade_DB_to_ver_8(PEP_SESSION session) {
     return PEP_STATUS_OK;
 }
 
-
 static PEP_STATUS _upgrade_DB_to_ver_9(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1279,6 +1305,8 @@ static PEP_STATUS _upgrade_DB_to_ver_9(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_10(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1414,6 +1442,8 @@ static PEP_STATUS _force_upgrade_own_latest_protocol_version(PEP_SESSION session
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_12(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1463,6 +1493,8 @@ static PEP_STATUS _upgrade_DB_to_ver_12(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_14(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1480,10 +1512,14 @@ static PEP_STATUS _upgrade_DB_to_ver_14(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_15(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     return _create_group_tables(session);
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_16(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1501,6 +1537,8 @@ static PEP_STATUS _upgrade_DB_to_ver_16(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_17(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1520,6 +1558,8 @@ static PEP_STATUS _upgrade_DB_to_ver_17(PEP_SESSION session) {
 // Version 2.0 and earlier will now no longer be supported with other
 // pEp users.
 static PEP_STATUS _upgrade_DB_to_ver_18(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1543,6 +1583,8 @@ static PEP_STATUS _upgrade_DB_to_ver_18(PEP_SESSION session) {
 }
 
 static PEP_STATUS _upgrade_DB_to_ver_19(PEP_SESSION session) {
+    PEP_REQUIRE(session);
+
     int int_result = SQLITE_OK;
     PEP_SQL_BEGIN_LOOP(int_result);
     int_result = sqlite3_exec(
@@ -1565,6 +1607,7 @@ static PEP_STATUS _upgrade_DB_to_ver_19(PEP_SESSION session) {
 
 // Honestly, the upgrades should be redone in a transaction IMHO.
 static PEP_STATUS _check_and_execute_upgrades(PEP_SESSION session, int version) {
+    PEP_REQUIRE(session);
     PEP_STATUS status = PEP_STATUS_OK;
 
     switch(version) {
@@ -1648,6 +1691,8 @@ static PEP_STATUS _check_and_execute_upgrades(PEP_SESSION session, int version) 
 
 static int pEp_open_local_database(PEP_SESSION session,
                                    int other_flags) {
+    PEP_REQUIRE(session);
+
     PEP_ASSERT(! EMPTYSTR(LOCAL_DB));
     PEP_ASSERT(session->db == NULL);
     return sqlite3_open_v2(LOCAL_DB,
