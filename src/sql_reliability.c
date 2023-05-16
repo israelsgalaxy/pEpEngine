@@ -141,8 +141,8 @@ int _pEp_sqlite3_step_nonbusy(PEP_SESSION session,
     if (! transaction_in_progress_at_entry)
         PEP_SQL_BEGIN_EXCLUSIVE_TRANSACTION();
     sqlite_status = sqlite3_step(* prepared_statement_p);
-    if (sqlite_status != SQLITE_OK && sqlite_status != SQLITE_ROW
-        && sqlite_status != SQLITE_DONE)
+/*    if (sqlite_status != SQLITE_OK && sqlite_status != SQLITE_ROW
+        && sqlite_status != SQLITE_DONE)*/
         LOG_NONOK("sqlite_status is %s from executing %s",
                   pEp_sql_status_to_status_text(session, sqlite_status),
                   sqlite3_expanded_sql(* prepared_statement_p));
