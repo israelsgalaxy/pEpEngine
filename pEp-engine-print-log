@@ -16,8 +16,18 @@ else
     pathname=$HOME/dot-pep-v3/log.db
 fi
 
-echo "SELECT PidTid, Timestamp, Lvl, Location, Entry FROM UserEntries LIMIT $limit;" \
-    | sqlite3 -readonly -noheader -list -separator ' ' \
+cat <<EOF |
+    SELECT PidTid,
+           Timestamp,
+           Lvl,
+           Location || ' ' || (CASE WHEN Entry IS NOT NULL
+                                   THEN Entry
+                                   ELSE ''
+                               END)
+    FROM UserEntries
+    ORDER BY id
+    LIMIT $limit;
+EOF
+      sqlite3 -readonly -noheader -column \
               "$pathname" \
-    | sed 's/\t /g/;s/ \+$//'
-
+    | sed 's/[\t ]\+$//'
